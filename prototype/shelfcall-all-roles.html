@@ -990,19 +990,19 @@
       lusine:{ id:'lusine', name:'Lusine', city:'Yerevan' }
     },
     sellers: {
-      aram:{ id:'aram', email:'accounts@arambooks.am', joined: now - 20*DAY, name:'Aram Books', since:'2026', orders:0, avatar:null, bio:'Second-hand shop near Mashtots. Strong on Russian classics, art books and 70s–90s translations.',
+      aram:{ id:'aram', email:'accounts@arambooks.am', phone:'+374 10 52 18 40', joined: now - 20*DAY, name:'Aram Books', since:'2026', orders:0, avatar:null, bio:'Second-hand shop near Mashtots. Strong on Russian classics, art books and 70s–90s translations.',
         locations:[ {id:'mash', label:'Mashtots branch', addr:'Mashtots 41, Yerevan', hours:'Mon–Sat 11–19', pickup:true},
                     {id:'tum', label:'Tumanyan branch', addr:'Tumanyan 12, Yerevan', hours:'Sat 11–19', pickup:true} ],
         payMode:'after',
         reviews:[ {by:'Dina', stars:5, when:'2 weeks ago', text:'Exactly the edition I hoped for, wrapped in paper. Handed over next day.'},
                   {by:'Sergey', stars:4, when:'1 month ago', text:'Book as described. Had to wait two days before it was ready.'},
                   {by:'Anna', stars:5, when:'1 month ago', text:'Sent three photos before I bought. No surprises when it arrived.'} ] },
-      nairi:{ id:'nairi', email:'nairi.stall@example.am', joined: now - 118*DAY, trialStart: now - 116*DAY, name:'Nairi', since:'2026', orders:0, avatar:null, missed:['r6'],
+      nairi:{ id:'nairi', email:'nairi.stall@example.am', phone:'+374 98 41 20 77', joined: now - 118*DAY, trialStart: now - 116*DAY, name:'Nairi', since:'2026', orders:0, avatar:null, missed:['r6'],
         bio:'Small stall, mostly English paperbacks and Penguin editions.',
         locations:[ {id:'tum12', label:'Tumanyan 12', addr:'Tumanyan 12, Yerevan', hours:'Sat 11–19', pickup:true} ],
         payMode:'onpickup',
         reviews:[ {by:'Lusine', stars:5, when:'3 weeks ago', text:'Cheapest of the three offers and the book was fine.'} ] },
-      grigor:{ id:'grigor', email:'grigor@example.am', joined: now - 54*DAY, trialStart: now - 51*DAY, name:'Grigor Books', since:'2026', orders:0, avatar:null, missed:['r6'],
+      grigor:{ id:'grigor', email:'grigor@example.am', phone:'+374 55 30 61 19', joined: now - 54*DAY, trialStart: now - 51*DAY, name:'Grigor Books', since:'2026', orders:0, avatar:null, missed:['r6'],
         bio:'Online only. Science fiction, mostly Soviet-era printings.',
         locations:[ {id:'wh', label:'Warehouse', addr:'Arshakunyats 8, Yerevan', hours:'Mon–Fri 10–18', pickup:false} ],
         payMode:'after', reviews:[] }
@@ -1070,18 +1070,18 @@
         when:{ kind:'slot', at: now - 12*DAY }, subs:[
         { no:'1038-A', seller:'aram', loc:'mash', items:['h1'], delivery:'courier',
           fee:1000, books:5200, total:6200, status:'completed', by:'courier', courier:'vahe',
-          doneAt: now - 12*DAY, reviewed:true, shopConfirmedCash:true } ] },
+          placedAt: now - 13*DAY, readyAt: now - 13*DAY + 3*HOUR, shippedAt: now - 12*DAY - 4*HOUR, doneAt: now - 12*DAY, reviewed:true, shopConfirmedCash:true } ] },
       { id:1039, reader:'anna', name:'Anna', phone:'+374 94 12 34 56',
         closed:[], released:0, delivery:'pickup', fee:0, books:7400, total:7400, subs:[
         { no:'1039-A', seller:'nairi', loc:'tum12', items:['h2'], delivery:'pickup',
           fee:0, books:7400, total:7400, status:'completed', by:'code', code:'8812',
-          doneAt: now - 9*DAY, reviewed:true } ] },
+          placedAt: now - 10*DAY, readyAt: now - 10*DAY + 2*HOUR, doneAt: now - 9*DAY, reviewed:true } ] },
       { id:1040, reader:'lusine', name:'Lusine', phone:'+374 95 65 43 21', addr:'Komitas 3',
         closed:[], released:0, delivery:'courier', fee:1000, books:4300, total:5300,
         when:{ kind:'slot', at: now - 2*DAY }, subs:[
         { no:'1040-A', seller:'aram', loc:'tum', items:['h3'], delivery:'courier',
           fee:1000, books:4300, total:5300, status:'completed', by:'courier', courier:'vahe',
-          doneAt: now - 2*DAY, reviewed:false } ] }
+          placedAt: now - 3*DAY, readyAt: now - 3*DAY + 5*HOUR, shippedAt: now - 2*DAY - 3*HOUR, doneAt: now - 2*DAY, reviewed:false } ] }
     ],
     seq: { o: 5, r: 7, ord: 1042 }
   };
@@ -6105,23 +6105,16 @@
     allSubs().forEach(function(x){ if (x.sb.no === view.p.id) f = x });
     if (!f) return scrOpsOrders();
     var o = f.o, sb = f.sb, st = opsStuck(o, sb), to = P('to', '');
-    var steps = [['Placed', sb.placedAt], ['Ready', sb.readyAt], [sb.delivery === 'pickup' ? 'Collected' : 'Delivered', sb.status === 'completed' ? doneAt(sb) : null],
+    var steps = [['Placed', sb.placedAt], ['Ready', sb.readyAt],
+                 ['Collected by the courier', sb.delivery === 'courier' && sb.status !== 'cancelled' ? (sb.shippedAt || null) : null],
+                 [sb.delivery === 'pickup' ? 'Collected' : 'Delivered', sb.status === 'completed' ? doneAt(sb) : null],
                  ['Cancelled', sb.status === 'cancelled' ? (sb.doneAt || null) : null]];
     var row = function(k, v){ return '<div class="between" style="padding:3px 0"><span class="small muted grow">'+k+'</span><span class="small" style="text-align:right">'+v+'</span></div>' };
     return '<button class="back" data-act="'+navAct('a.orders', sb.status === 'completed' ? 'done' : sb.status === 'cancelled' ? 'cancelled' : 'open')+'">← Orders</button>'+
       '<h1>#'+esc(sb.no)+'</h1>'+
       '<p class="sub">'+esc(subWord(sb))+' for '+stateAge(sb)+' · '+(sb.delivery === 'courier' ? 'courier' : 'pickup')+' · '+money(sb.total)+' in cash</p>'+
       (st ? '<div class="note bad" style="margin-bottom:14px"><b>Needs an answer:</b> '+esc(st)+'.</div>' : '')+
-      '<div class="card" style="margin-bottom:12px">'+
-        row('Shop', '<button class="btn link" style="min-height:0" data-go="a.shop" data-p="'+sb.seller+'">'+esc(seller(sb.seller).name)+'</button>')+
-        row('Reader', esc(o.name || rname(o.reader)))+
-        row('Books', sb.items.map(function(id){ return esc(offer(id).title) }).join(', '))+
-        (o.when && o.when.kind === 'slot' ? row('Reader asked for', esc(dayLabel(o.when.at))+', '+slotLabel(o.when.at)) : '')+
-        row('Shop’s money', cashChip(sb))+
-      '</div>'+
-      '<div class="tl" style="margin:0 0 16px">'+steps.filter(function(s){ return s[1] }).map(function(s){
-        return '<div class="done"><i></i>'+s[0]+' · '+dstr(s[1])+', '+hhmm(s[1])+'</div>';
-      }).join('')+'</div>'+
+      opsOrderFacts(o, sb, steps)+
       (sb.disputed && !sb.resolved
         ? '<div class="note bad" style="margin-bottom:14px"><b>The buyer flagged this.</b> '+esc(sb.disputeWhy || '')+
           ' The shop’s commission is held until it is settled.'+
@@ -6141,6 +6134,57 @@
           '<p class="hint" style="margin-top:10px">Everyone affected is told in your words, not a generic notice.</p>'
         : '<p class="hint" style="margin-top:0">Pick a state. What it changes is shown before anything moves.</p>')+
       logBlock('order', sb.no);
+  }
+
+  /* Everything the office knows about one order, on one page: the books as
+     the reader bought them (photo, condition, price), every time it moved,
+     and how to reach the shop, the reader and the courier. The office is the
+     one role that sees all of it; the shop's and the courier's screens keep
+     their own limits. */
+  function telLink(ph){
+    return ph ? '<a class="btn link" style="min-height:0;padding:0" href="tel:'+esc(String(ph).replace(/[^+\d]/g, ''))+'">'+esc(ph)+'</a>'
+              : '<span class="muted">'+esc(tr('not given'))+'</span>';
+  }
+  function opsOrderFacts(o, sb, steps){
+    var sl = seller(sb.seller), l = loc(sb.seller, sb.loc), cr = sb.courier && db.couriers[sb.courier];
+    var rd = db.readers[o.reader] || {};
+    var line = function(k, v){
+      return '<div class="between" style="padding:6px 0;border-top:1px solid var(--border);gap:12px;align-items:flex-start">'+
+        '<span class="small muted" style="flex:none;min-width:92px">'+esc(k)+'</span>'+
+        '<span class="small" style="text-align:right;min-width:0;overflow-wrap:anywhere">'+v+'</span></div>';
+    };
+    var block = function(title, body){
+      return '<div class="card" style="margin-bottom:12px"><p class="eyebrow" style="margin:0 0 4px">'+esc(title)+'</p>'+body+'</div>';
+    };
+    var books = sb.items.map(function(id){
+      var b = offer(id) || {};
+      return '<div class="row" style="gap:12px;align-items:flex-start;padding:10px 0;border:none;border-top:1px solid var(--border)">'+cover(b, 'm')+
+        '<div class="grow stack" style="gap:2px;min-width:0"><p style="margin:0;font-weight:600">'+esc(b.title || '')+'</p>'+
+          '<p class="small muted" style="margin:0">'+esc(b.author || '')+(b.year ? ' · '+b.year : '')+'</p>'+
+          '<p class="small muted" style="margin:0">'+esc(b.cond || '')+' · '+(b.photos && b.photos.length ? b.photos.length+' photo'+(b.photos.length>1?'s':'') : 'no photo')+'</p></div>'+
+        '<span class="price">'+money(b.price || 0)+'</span></div>';
+    }).join('');
+    var fee = sb.fee || 0;
+    var money_ = line('Books', money(sb.books))+
+      (sb.delivery === 'courier' ? line('Delivery', fee ? money(fee) : 'paid on another part of this order') : '')+
+      line('Total in cash', '<b>'+money(sb.total)+'</b>')+
+      line('Shop’s money', cashChip(sb))+
+      line('Our 12%', commissionable(sb) ? money(Math.round(sb.books * 0.12)) : 'none — free month');
+    var times = steps.filter(function(x){ return x[1] }).map(function(x){ return line(x[0], dstrY(x[1])+', '+hhmm(x[1])) }).join('')+
+      (o.when && o.when.kind === 'slot' ? line('Reader asked for', esc(dayLabel(o.when.at))+', '+slotLabel(o.when.at)) : '');
+    var shop = line('Shop', '<button class="btn link" style="min-height:0;padding:0" data-go="a.shop" data-p="'+sb.seller+'">'+esc(sl.name)+'</button>')+
+      line('Branch', esc(l.label)+'<br><span class="muted">'+esc(l.addr)+' · '+esc(l.hours)+'</span>')+
+      line('Phone', telLink(sl.phone))+
+      line('Email', sl.email && /@/.test(sl.email) ? '<a class="btn link" style="min-height:0;padding:0" href="mailto:'+esc(sl.email)+'">'+esc(sl.email)+'</a>' : '<span class="muted">'+esc(tr('not given'))+'</span>');
+    var buyer = line('Name', esc(o.name || rname(o.reader)))+
+      line('Phone', telLink(o.phone || rd.phone))+
+      (sb.delivery === 'courier'
+        ? line('Address', esc(o.addr || rd.address || '—'))+(o.note ? line('Note for the courier', esc(o.note)) : '')
+        : line('Collects at', esc(l.label)+(sb.code ? ' · code '+esc(sb.code) : '')));
+    var courier = sb.delivery === 'courier'
+      ? block('Courier', cr ? line('Name', esc(cr.name))+line('Phone', telLink(cr.phone)) : '<p class="small muted" style="margin:6px 0 0">Not collected yet.</p>')
+      : '';
+    return block('Books', books)+block('Money', money_)+block('Times', times)+block('Shop', shop)+block('Reader', buyer)+courier;
   }
 
   /* ---- shops ---------------------------------------------------------------- */
@@ -6289,7 +6333,8 @@
       return head('Open a shop')+
         '<p class="sub">It opens as soon as you finish \u2014 no application, its free month starts today.</p>'+
         '<label class="f"><span>Shop name</span><input class="in" id="ns_name" value="'+esc(d.ns_name||'')+'" placeholder="Tsolak Books"></label>'+
-        '<label class="f"><span>Owner\u2019s email</span><input class="in" id="ns_email" inputmode="email" value="'+esc(d.ns_email||'')+'" placeholder="tsolak@example.am"></label>'+
+        '<div class="two tight"><label class="f"><span>Owner\u2019s email</span><input class="in" id="ns_email" inputmode="email" value="'+esc(d.ns_email||'')+'" placeholder="tsolak@example.am"></label>'+
+        '<label class="f"><span>Shop phone</span><input class="in" id="ns_phone" inputmode="tel" value="'+esc(d.ns_phone||'')+'" placeholder="+374 10 52 18 40"></label></div>'+
         '<label class="f"><span>About the shop</span><textarea class="in" id="ns_bio" style="min-height:90px" placeholder="Antiquarian and art books, mostly Armenian imprints.">'+esc(d.ns_bio||'')+'</textarea></label>'+
         '<button class="btn wide" data-act="nsstep:2">Continue</button>';
     return head('Its first branch')+
@@ -6947,6 +6992,25 @@
       "Add location":"Добавить точку",
       "Add photo":"Добавить фото",
       "Add to cart":"В корзину",
+      "Books":"Книги",
+      "Money":"Деньги",
+      "Times":"Время",
+      "Address":"Адрес",
+      "Note for the courier":"Заметка для курьера",
+      "Collects at":"Забирает в",
+      "Total in cash":"Итого наличными",
+      "Shop’s money":"Деньги магазина",
+      "Our 12%":"Наши 12%",
+      "none — free month":"нет — бесплатный месяц",
+      "Ready":"Готов",
+      "Collected by the courier":"Забран курьером",
+      "Cancelled":"Отменён",
+      "Reader asked for":"Читатель просил",
+      "not given":"не указан",
+      "Not collected yet.":"Ещё не забран.",
+      "Shop phone":"Телефон магазина",
+      "Phone the office and the courier can call":"Телефон для офиса и курьера",
+      "paid on another part of this order":"оплачена в другой части заказа",
       "All periods together":"Все периоды вместе",
       "now":"сейчас",
       "Each column is the day the reader ordered, paid or not. Tap one for its numbers.":"Каждый столбик — день, когда читатель сделал заказ, оплачен он или нет. Нажмите, чтобы увидеть цифры.",
@@ -8155,6 +8219,7 @@
           '</div>'+
           '<input type="file" id="avIn" accept="image/*" hidden></div>'+
         '<label class="f"><span>Shop name</span><input class="in" id="p_shop" value="'+esc(sl.name)+'"></label>'+
+        '<label class="f"><span>Phone the office and the courier can call</span><input class="in" id="p_sphone" inputmode="tel" value="'+esc(sl.phone||'')+'"></label>'+
         '<label class="f"><span>What your shelves are good for</span><textarea class="in" id="p_bio">'+esc(sl.bio)+'</textarea></label>'+
         '<div class="btns"><button class="btn" data-act="saveseller">Save</button>'+
         '<button class="btn ghost" data-go="r.seller" data-p="'+sl.id+'">View public profile</button></div>'+
@@ -8328,6 +8393,7 @@
         '<p style="margin:0;font-weight:600">'+esc(ap.name)+'</p></div>'+
       row('About the shop', esc(ap.bio || 'not written yet'))+
       row('Branch', esc(l.label || '')+' · '+esc(l.addr || '')+'<br><span class="small muted">'+esc(l.hours || '')+' · '+(l.pickup ? 'buyers may collect' : 'no pickup')+'</span>')+
+      row('Phone', esc(ap.phone || 'not given'))+
       row('Payment', ap.payMode === 'onpickup' ? 'The courier pays when they collect' : 'The courier settles after delivery')+
     '</div>';
   }
@@ -8349,7 +8415,7 @@
   /* the form, opened at the part that needs work, with everything else kept */
   function appDraft(ap, step){
     var l = ap.locations[0] || {};
-    return { g: step, shop: ap.name, g_shop: ap.name, bio: ap.bio, g_bio: ap.bio, label: l.label, g_label: l.label,
+    return { g: step, shop: ap.name, g_shop: ap.name, phone: ap.phone || '', g_phone: ap.phone || '', bio: ap.bio, g_bio: ap.bio, label: l.label, g_label: l.label,
              addr: String(l.addr || '').replace(/, Yerevan$/, ''), g_addr: String(l.addr || '').replace(/, Yerevan$/, ''),
              hours: l.hours === 'hours not given' ? '' : l.hours, g_hours: l.hours === 'hours not given' ? '' : l.hours,
              pickup: l.pickup !== false, pay: ap.payMode, avatar: ap.avatar };
@@ -8377,6 +8443,7 @@
             '<p class="small muted" style="margin:0">Shopfront, a shelf, your logo. Optional — until then readers see your initials.</p>'+
           '</div><input type="file" id="avIn" accept="image/*" hidden></div>'+
         '<label class="f"><span>Shop or seller name</span><input class="in" id="g_shop" value="'+esc(d.shop||'')+'" placeholder="Aram Books"></label>'+
+        '<label class="f"><span>Phone the office and the courier can call</span><input class="in" id="g_phone" inputmode="tel" value="'+esc(d.phone||'')+'" placeholder="+374 10 52 18 40"></label>'+
         '<button class="btn wide" data-act="gstep:2">Continue</button>';
     }
 
@@ -8434,7 +8501,7 @@
     ['p_name','p_phone','p_addr','p_shop','p_bio','p_cphone','l_label','l_addr','l_hours',
      'g_shop','g_bio','g_label','g_addr','g_hours','a_email','a_pass','p_ref',
      'cash_got','op_why','op_amt','rp_text','c_code',
-     'ns_name','ns_email','ns_bio','ns_label','ns_addr','ns_hours'].forEach(function(id){
+     'ns_name','ns_email','ns_phone','g_phone','p_sphone','ns_bio','ns_label','ns_addr','ns_hours'].forEach(function(id){
       var el = document.getElementById(id);
       if (el) view.draft[id] = el.value;
     });
@@ -8601,7 +8668,7 @@
           if (ap.owner && db.sellers[ap.owner]){
             /* an existing account that registered: its details become the shop's */
             var so = db.sellers[ap.owner];
-            so.name = ap.name; so.bio = ap.bio || ''; so.payMode = ap.payMode || 'after';
+            so.name = ap.name; so.bio = ap.bio || ''; so.payMode = ap.payMode || 'after'; if (ap.phone) so.phone = ap.phone;
             if (ap.avatar) so.avatar = ap.avatar;
             so.locations = ap.locations.slice(); so.reviews = []; so.joined = Date.now();
             so.since = String(new Date().getFullYear()); so.suspended = false; so.pending = false;
@@ -8705,7 +8772,7 @@
         readDraft(); var dS = view.draft;
         if (!String(dS.ns_addr||'').trim()){ dS.err = 'A street address \u2014 the courier and the readers go there.'; render(); return; }
         var sid = 'shop-' + Date.now().toString(36) + ((SYNC && SYNC.mode === 'shared') ? '-' + SYNC.device : '');
-        db.sellers[sid] = { id: sid, name: dS.ns_name.trim(), email: dS.ns_email.trim(), bio: String(dS.ns_bio||'').trim(),
+        db.sellers[sid] = { id: sid, name: dS.ns_name.trim(), email: dS.ns_email.trim(), phone: String(dS.ns_phone||'').trim(), bio: String(dS.ns_bio||'').trim(),
           since: String(new Date().getFullYear()), orders: 0, avatar: null, reviews: [], missed: [], payMode: 'after',
           joined: Date.now(), trialStart: Date.now(),
           locations: [{ id: 'loc1', label: String(dS.ns_label||'').trim() || 'Shop', addr: dS.ns_addr.trim() + ', Yerevan',
@@ -9018,6 +9085,7 @@
           if (!(d.g_addr||'').trim()){ d.err='A street address. A reader collecting needs somewhere to go.'; render(); return; }
         }
         if (d.g_shop !== undefined) d.shop = d.g_shop;
+        if (d.g_phone !== undefined) d.phone = d.g_phone;
         if (d.g_bio !== undefined) d.bio = d.g_bio;
         if (d.g_label !== undefined) d.label = d.g_label;
         if (d.g_addr !== undefined) d.addr = d.g_addr;
@@ -9030,6 +9098,7 @@
         readDraft();
         var sl3 = seller(db.me.sellerId), ap3 = myApp();
         var data3 = { name: (d.shop || d.g_shop || sl3.name).trim(), bio: (d.bio || d.g_bio || '').trim(),
+          phone: String(d.phone || d.g_phone || '').trim(),
           payMode: d.pay || 'after', avatar: d.avatar || null,
           locations: [{ id:'loc1', label:(d.label||d.g_label||'Main').trim(),
             addr:(d.addr||d.g_addr||'').trim()+', Yerevan',
@@ -9038,7 +9107,7 @@
           /* a new shop: its own record, held back from readers until a person
              has looked at it, and this phone becomes that shop */
           var nid = 'shop-' + Date.now().toString(36) + ((SYNC && SYNC.mode === 'shared') ? '-' + SYNC.device : '');
-          db.sellers[nid] = { id: nid, name: data3.name || 'New shop', email: 'the Google account you signed in with',
+          db.sellers[nid] = { id: nid, name: data3.name || 'New shop', email: 'the Google account you signed in with', phone: data3.phone,
             since: String(new Date().getFullYear()), orders: 0, avatar: data3.avatar, bio: data3.bio,
             locations: data3.locations.slice(), payMode: data3.payMode, reviews: [], missed: [],
             joined: Date.now(), trialStart: Date.now(), pending: true };
@@ -9075,6 +9144,7 @@
         readDraft(); var sl = seller(db.me.sellerId);
         if (d.p_shop) sl.name = d.p_shop;
         if (d.p_bio !== undefined) sl.bio = d.p_bio;
+        if (d.p_sphone !== undefined) sl.phone = d.p_sphone.trim();
         toast('Saved'); render(); break;
       }
       case 'savefee': { readDraft(); var sl2 = seller(db.me.sellerId);
@@ -9211,7 +9281,7 @@
         if (sbA.status==='placed'){ sbA.status = sbA.delivery==='pickup' ? 'shipped' : 'ready';
           sbA.readyAt = Date.now();
           toast(sbA.delivery==='pickup' ? 'The shop put it aside \u2014 your code is on the order' : 'The shop has it ready \u2014 a courier is coming'); }
-        else if (sbA.status==='ready'){ sbA.status='shipped'; toast('The courier collected it'); }
+        else if (sbA.status==='ready'){ sbA.status='shipped'; sbA.shippedAt = Date.now(); toast('The courier collected it'); }
         else if (sbA.status==='shipped'){ sbA.status='completed'; sbA.doneAt=Date.now();
           sbA.by = sbA.delivery==='pickup' ? 'code' : 'courier';
           toast(sbA.delivery==='pickup' ? 'The shop entered your code \u2014 order finished' : 'The courier delivered it \u2014 order finished'); }
@@ -9220,7 +9290,7 @@
       case 'ccollect': {
         var oc1 = db.orders.filter(function(x){ return String(x.id)===String(a) })[0];
         var sc1 = oc1.subs.filter(function(x){ return x.no===b })[0];
-        sc1.status='shipped'; sc1.courier = db.me.courierId;
+        sc1.status='shipped'; sc1.courier = db.me.courierId; sc1.shippedAt = Date.now();
         if (sc1.payMode === 'onpickup'){
           sc1.paidShop = true; sc1.settled = true;
           ledgerAdd(sc1.books, 'courier', 'shop', sc1.no, 'paid at pickup');
