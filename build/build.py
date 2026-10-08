@@ -246,7 +246,7 @@ BUILDS = [
 DOC_HEAD = (
     '<!doctype html>\n<html lang="en">\n<head>\n'
     '<meta charset="utf-8">\n'
-    '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n'
+    '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">\n'
     '<meta name="color-scheme" content="light dark">\n'
     '<meta name="robots" content="noindex">\n'
     # the saved Light / Dark choice, applied before the first paint so a dark
