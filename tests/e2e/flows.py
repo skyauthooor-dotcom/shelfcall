@@ -729,6 +729,17 @@ async def billing_counts_every_order_on_the_day_it_was_placed(t):
     assert not await shop.evaluate("() => [...document.querySelectorAll('#tabbar [data-go]')].some(b => b.getAttribute('data-go') === 's.stats')"), 'Results is still in the tab bar'
 
 
+@flow
+async def office_sees_everything_about_an_order(t):
+    admin = await t.phone('/admin' + t.own_world())
+    await t.go(admin, 'a.order', '1040-A')
+    txt = await t.text(admin)
+    for need in ['+374 10 52 18 40', 'accounts@arambooks.am', 'Tumanyan 12', '+374 95 65 43 21', 'Komitas 3',
+                 '+374 77 18 42 06', 'The Chrysalids', '4 300', '5 300', 'Placed', 'Ready', 'Collected by the courier', 'Delivered']:
+        assert need.replace(' ', '\u00a0') in txt or need in txt, 'the office order page does not show ' + need
+    assert await admin.evaluate("() => !!document.querySelector('main .cover')"), 'no book picture'
+
+
 async def _contains(pg, s):
     return s in await Run.text(pg)
 
