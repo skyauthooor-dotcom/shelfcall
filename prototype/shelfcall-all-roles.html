@@ -407,6 +407,15 @@
     body.has-dock.has-tabbar main{padding-bottom:calc(var(--dock-h, 140px) + 24px)}
     body.has-dock .toast{bottom:calc(var(--dock-h, 64px) + 16px)}
     body.has-dock.has-tabbar .toast{bottom:calc(var(--dock-h, 140px) + 16px)}
+    /* With the keyboard up the dock rides on top of it, not under it: the
+       tab bar steps aside (nobody changes section mid-sentence) and the dock
+       sits on the keyboard's edge, which --kb measures from visualViewport.
+       Android also resizes the page itself (interactive-widget in the
+       viewport meta); --kb is then 0 and the dock simply follows. */
+    .dock.on{bottom:var(--kb, 0px)}
+    body.kb-open .tabbar{display:none}
+    body.kb-open.has-tabbar .dock.on{padding:10px 16px}
+    body.kb-open.has-dock .toast{bottom:calc(var(--kb, 0px) + var(--dock-h, 64px) + 12px)}
     /* the old sticky helpers stand down when the dock has the button */
     body.has-dock main.bottom-act{min-height:0}
     body.has-dock .pin-bottom:empty, body.has-dock .page-tail:empty{display:none}
@@ -446,6 +455,7 @@
   textarea.in{min-height:92px;resize:vertical;line-height:1.5}
   /* the browser's own placeholder grey is 3.7:1 on a dark field */
   .in::placeholder{color:var(--muted-foreground);opacity:1}
+  .in.eg::placeholder{font-style:italic}
   .seg{display:inline-flex;gap:4px;flex-wrap:wrap;background:var(--muted);border-radius:var(--radius-md);padding:3px;max-width:100%}
   .seg button{border:0;border-radius:var(--radius-sm);padding:8px 14px;min-height:36px;font-size:14px;line-height:20px;font-weight:500;color:var(--muted-foreground);white-space:nowrap}
   .seg button[aria-pressed="true"]{background:var(--background);color:var(--foreground)}
@@ -785,6 +795,13 @@
   .chart .b{fill:var(--foreground);transition:opacity .12s}
   .chart text.val{fill:var(--foreground);font-weight:600}
   .chart .hit{fill:transparent;cursor:pointer}
+  .chart .stub{fill:var(--border)}
+  /* a shop's answer under a review: a tinted ground, no border (it is not a button) */
+  .reply{margin-top:10px;padding:10px 12px;background:var(--muted);border-radius:var(--radius-md);color:var(--foreground)}
+  /* the billing chart has no box: the page margin is its edge */
+  .pblock{margin:4px 0 6px}
+  .chart.bare{margin:10px 0 6px}
+  .chart.bare .readout{margin:0 0 6px}
   .chart.active .bar:not(.on) .b{opacity:.28}
   .readout{font-size:13px;line-height:18px;margin:0 0 8px;color:var(--foreground);font-variant-numeric:tabular-nums;min-height:18px}
   .hbar{flex:0 1 40%;height:8px;border-radius:0 4px 4px 0;background:var(--tint);overflow:hidden;min-width:48px}
@@ -1201,9 +1218,29 @@
      after it, statements run from the 15th to the 14th and are issued on the
      15th. Every statement below is computed from the orders above, never typed:
      a statement that disagrees with the sales it bills is worse than none. */
-  function trialStartOf(id){
-    return id === db.me.sellerId ? db.account.trialStart : (seller(id).trialStart || seller(id).joined || now);
+  /* Each shop has its own account: its free month, its statements, its claim
+     that it has paid. Aram's lives at db.account (the seed and the demo
+     buttons read it there); any other shop's sits on the shop and is made
+     the first time that shop opens its own Billing. acctPeek() reads without
+     making one, for the screens that only look. */
+  function acctPeek(id){
+    id = id || db.me.sellerId;
+    if (id === 'aram' || !db.sellers[id]) return db.account;
+    var s0 = db.sellers[id];
+    return s0.account || { state: 'trial', trialStart: s0.trialStart || s0.joined || now, trialAck: null,
+                           billingDay: new Date(s0.trialStart || s0.joined || now).getDate() };
   }
+  function acct(id){
+    id = id || db.me.sellerId;
+    if (id === 'aram' || !db.sellers[id]) return db.account;
+    var s0 = db.sellers[id];
+    if (!s0.account) s0.account = acctPeek(id);
+    return s0.account;
+  }
+  function claimShops(){
+    return Object.keys(db.sellers).filter(function(id){ return !!acctPeek(id).claim });
+  }
+  function trialStartOf(id){ return acctPeek(id).trialStart }
   function trialEndOf(id){ return addDays(trialStartOf(id), 30) }
   function commissionable(sb){ return doneAt(sb) >= trialEndOf(sb.seller) }
   function periodBounds(ts){
@@ -1249,6 +1286,20 @@
   function req(id){ return db.requests.filter(function(r){ return r.id===id })[0] }
   function offer(id){ return db.offers.filter(function(o){ return o.id===id })[0] }
   function seller(id){ return db.sellers[id] }
+  /* Which shop this phone plays. It is this device's own choice (db.me never
+     syncs) and is remembered per test world, so two phones can be two
+     different shops answering the same request. A shop that no longer
+     exists (after Start over) falls back to Aram Books. */
+  function shopKey(){ return 'sc_shop_' + ((typeof SYNC !== 'undefined' && SYNC.space) || 'main') }
+  function setMyShop(id){ db.me.sellerId = id; try { localStorage.setItem(shopKey(), id) } catch(e){} }
+  var myShopRead = false;
+  function ensureMyShop(){
+    if (!myShopRead && typeof SYNC !== 'undefined' && SYNC.mode){
+      myShopRead = true;
+      try { var k = localStorage.getItem(shopKey()); if (k && db.sellers[k]) db.me.sellerId = k; } catch(e){}
+    }
+    if (!db.sellers[db.me.sellerId]) db.me.sellerId = 'aram';
+  }
   function loc(sid, lid){ var s=seller(sid); return s.locations.filter(function(l){return l.id===lid})[0] || s.locations[0] }
   function offersFor(rid){ return db.offers.filter(function(o){ return o.req===rid }) }
   /* ---- the two gates -----------------------------------------------------
@@ -1644,7 +1695,7 @@
   /* ============================== chrome ============================== */
   var TABS = {
     reader: [ ['r.requests','Requests'], ['r.orders','Orders'], ['r.cart','Cart'] ],
-    seller: [ ['s.feed','Feed'], ['s.offers','My offers'], ['s.orders','Orders'], ['s.stats','Results'], ['s.billing','Billing'] ],
+    seller: [ ['s.feed','Feed'], ['s.offers','My offers'], ['s.orders','Orders'], ['s.billing','Billing'] ],
     courier: [ ['c.jobs','Deliveries'], ['c.done','History'] ],
     ops: [ ['a.work','Overview'], ['a.apps','Applications'], ['a.reqs','Requests'], ['a.orders','Orders'], ['a.shops','Shops'] ]
   };
@@ -1660,7 +1711,6 @@
     's.feed':/* Cards01 */'<path d="M3 11C3 8.17157 3 6.75736 3.87868 5.87868C4.75736 5 6.17157 5 9 5H11C13.8284 5 15.2426 5 16.1213 5.87868C17 6.75736 17 8.17157 17 11V16C17 18.8284 17 20.2426 16.1213 21.1213C15.2426 22 13.8284 22 11 22H9C6.17157 22 4.75736 22 3.87868 21.1213C3 20.2426 3 18.8284 3 16V11Z"/><path d="M8.04435 11.762L8.42742 11.3048C9.15621 10.4349 9.52061 10 10 10C10.4794 10 10.8438 10.4349 11.5726 11.3048L11.9556 11.762C12.6519 12.593 13 13.0086 13 13.5C13 13.9914 12.6519 14.407 11.9556 15.238L11.5726 15.6952C10.8438 16.5651 10.4794 17 10 17C9.52061 17 9.15621 16.5651 8.42742 15.6952L8.04435 15.238C7.34812 14.407 7 13.9914 7 13.5C7 13.0086 7.34812 12.593 8.04435 11.762Z"/><path d="M16.9244 19C18.0202 18.3874 18.3929 17.0406 19.1383 14.3469L20.1925 10.5375C20.938 7.84378 21.3107 6.49694 20.678 5.4359C20.0453 4.37485 18.6543 4.01397 15.8724 3.2922L13.9052 2.78183C11.1232 2.06006 9.73225 1.69918 8.63642 2.31177C7.85623 2.74792 7.44258 3.55626 7 4.95786"/>',
     's.offers':/* BookOpen01 */'<path d="M7.99978 3.5H6.60021C4.43183 3.5 3.34764 3.5 2.67399 4.17362C2.00034 4.84724 2.00029 5.93144 2.00021 8.09982L2 13.3998C1.99992 15.5684 1.99987 16.6526 2.67353 17.3263C3.34719 18 4.43146 18 6.6 18H8.95042C10.4329 18 11.7092 19.0464 11.9999 20.5V5.5C11.0556 4.24097 9.99989 3.5 7.99978 3.5Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.0001 3.5H17.3997C19.5681 3.5 20.6523 3.5 21.3259 4.17362C21.9996 4.84724 21.9996 5.93144 21.9997 8.09982L21.9999 13.3998C22 15.5684 22 16.6526 21.3264 17.3263C20.6527 18 19.5684 18 17.3999 18H15.0495C13.567 18 12.2907 19.0464 12 20.5V5.5C12.9443 4.24097 14 3.5 16.0001 3.5Z" stroke-linecap="round" stroke-linejoin="round"/>',
     's.orders':/* Package */'<path d="M12 22C11.1818 22 10.4002 21.6698 8.83693 21.0095C4.94564 19.3657 3 18.5438 3 17.1613C3 16.7742 3 10.0645 3 7M12 22C12.8182 22 13.5998 21.6698 15.1631 21.0095C19.0544 19.3657 21 18.5438 21 17.1613V7M12 22L12 11.3548" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.32592 9.69138L5.40472 8.27785C3.80157 7.5021 3 7.11423 3 6.5C3 5.88577 3.80157 5.4979 5.40472 4.72215L8.32592 3.30862C10.1288 2.43621 11.0303 2 12 2C12.9697 2 13.8712 2.4362 15.6741 3.30862L18.5953 4.72215C20.1984 5.4979 21 5.88577 21 6.5C21 7.11423 20.1984 7.5021 18.5953 8.27785L15.6741 9.69138C13.8712 10.5638 12.9697 11 12 11C11.0303 11 10.1288 10.5638 8.32592 9.69138Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 12L8 13" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 4L7 9" stroke-linecap="round" stroke-linejoin="round"/>',
-    's.stats':/* ChartIncrease */'<path d="M21 21H10C6.70017 21 5.05025 21 4.02513 19.9749C3 18.9497 3 17.2998 3 14V3" stroke-linecap="round"/><path d="M7.99707 16.999C11.5286 16.999 18.9122 15.5348 18.6979 6.43269M16.4886 8.04302L18.3721 6.14612C18.5656 5.95127 18.8798 5.94981 19.0751 6.14286L20.9971 8.04302" stroke-linecap="round" stroke-linejoin="round"/>',
     's.billing':/* Invoice03 */'<path d="M20.016 2C18.9026 2 18 4.68629 18 8H20.016C20.9876 8 21.4734 8 21.7741 7.66455C22.0749 7.32909 22.0225 6.88733 21.9178 6.00381C21.6414 3.67143 20.8943 2 20.016 2Z"/><path d="M18 8.05426V18.6458C18 20.1575 18 20.9133 17.538 21.2108C16.7831 21.6971 15.6161 20.6774 15.0291 20.3073C14.5441 20.0014 14.3017 19.8485 14.0325 19.8397C13.7417 19.8301 13.4949 19.9768 12.9709 20.3073L11.06 21.5124C10.5445 21.8374 10.2868 22 10 22C9.71321 22 9.45546 21.8374 8.94 21.5124L7.02913 20.3073C6.54415 20.0014 6.30166 19.8485 6.03253 19.8397C5.74172 19.8301 5.49493 19.9768 4.97087 20.3073C4.38395 20.6774 3.21687 21.6971 2.46195 21.2108C2 20.9133 2 20.1575 2 18.6458V8.05426C2 5.20025 2 3.77325 2.87868 2.88663C3.75736 2 5.17157 2 8 2H20" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 6H14" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 10H6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 10.875C11.6716 10.875 11 11.4626 11 12.1875C11 12.9124 11.6716 13.5 12.5 13.5C13.3284 13.5 14 14.0876 14 14.8125C14 15.5374 13.3284 16.125 12.5 16.125M12.5 10.875C13.1531 10.875 13.7087 11.2402 13.9146 11.75M12.5 10.875V10M12.5 16.125C11.8469 16.125 11.2913 15.7598 11.0854 15.25M12.5 16.125V17" stroke-linecap="round"/>',
     's.reviews':/* Star */'<path d="M13.7276 3.44418L15.4874 6.99288C15.7274 7.48687 16.3673 7.9607 16.9073 8.05143L20.0969 8.58575C22.1367 8.92853 22.6167 10.4206 21.1468 11.8925L18.6671 14.3927C18.2471 14.8161 18.0172 15.6327 18.1471 16.2175L18.8571 19.3125C19.417 21.7623 18.1271 22.71 15.9774 21.4296L12.9877 19.6452C12.4478 19.3226 11.5579 19.3226 11.0079 19.6452L8.01827 21.4296C5.8785 22.71 4.57865 21.7522 5.13859 19.3125L5.84851 16.2175C5.97849 15.6327 5.74852 14.8161 5.32856 14.3927L2.84884 11.8925C1.389 10.4206 1.85895 8.92853 3.89872 8.58575L7.08837 8.05143C7.61831 7.9607 8.25824 7.48687 8.49821 6.99288L10.258 3.44418C11.2179 1.51861 12.7777 1.51861 13.7276 3.44418Z" stroke-linecap="round" stroke-linejoin="round"/>',
     'c.jobs':/* DeliveryTruck01 */'<path d="M19.5 17.5C19.5 18.8807 18.3807 20 17 20C15.6193 20 14.5 18.8807 14.5 17.5C14.5 16.1193 15.6193 15 17 15C18.3807 15 19.5 16.1193 19.5 17.5Z"/><path d="M9.5 17.5C9.5 18.8807 8.38071 20 7 20C5.61929 20 4.5 18.8807 4.5 17.5C4.5 16.1193 5.61929 15 7 15C8.38071 15 9.5 16.1193 9.5 17.5Z"/><path d="M14.5 17.5H9.5M19.5 17.5H20.2632C20.4831 17.5 20.5931 17.5 20.6855 17.4885C21.3669 17.4036 21.9036 16.8669 21.9885 16.1855C22 16.0931 22 15.9831 22 15.7632V13C22 9.41015 19.0899 6.5 15.5 6.5M2 4H12C13.4142 4 14.1213 4 14.5607 4.43934C15 4.87868 15 5.58579 15 7V15.5M2 12.75V15C2 15.9346 2 16.4019 2.20096 16.75C2.33261 16.978 2.52197 17.1674 2.75 17.299C3.09808 17.5 3.56538 17.5 4.5 17.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 7H8M2 10H6" stroke-linecap="round" stroke-linejoin="round"/>',
@@ -1700,7 +1750,7 @@
      way out. The order's own page is NOT one of them: it is where checkout
      lands AND where the orders list sends you back to later, so it is a
      destination. A destination that hides the tab bar is a trap. */
-  var FLOW = ['r.new','r.checkout','r.review','s.newoffer','s.pay','s.location','s.reg','x.auth','s.apply'];
+  var FLOW = ['r.new','r.checkout','r.review','s.newoffer','s.pay','s.location','s.reg','x.auth','s.apply','a.newshop'];
   function renderTabbar(){
     var el = document.getElementById('tabbar');
     if (FLOW.indexOf(view.screen) >= 0){
@@ -1716,7 +1766,7 @@
        the shop profile — a seller reads them, they are not a place they work. */
     var MOBILE = {
       reader:  ['r.requests','r.orders','r.cart'],
-      seller:  ['s.feed','s.offers','s.orders','s.stats','s.billing'],
+      seller:  ['s.feed','s.offers','s.orders','s.billing'],
       courier: ['c.jobs','c.done'],
       ops:     ['a.work','a.apps','a.reqs','a.orders','a.shops']
     };
@@ -1738,7 +1788,7 @@
     if (id==='a.apps') n = db.shopApps.filter(function(a){ return a.state === 'waiting' }).length;
     if (id==='a.reqs') n = waitingReqs().length + waitingOffers().length;
     if (id==='a.orders') n = allSubs().filter(function(x){ return x.sb.disputed && !x.sb.resolved }).length;
-    if (id==='a.shops') n = (db.account.claim ? 1 : 0) + db.settles.filter(function(x){ return x.state === 'mismatch' || x.state === 'open' }).length;
+    if (id==='a.shops') n = claimShops().length + db.settles.filter(function(x){ return x.state === 'mismatch' || x.state === 'open' }).length;
     if (id==='r.requests') n = myRequests().filter(function(r){ return liveOffers(r.id).some(function(o){return o.status==='sent'}) }).length;
     return n ? '<span class="count">'+n+'</span>' : '';
   }
@@ -1746,7 +1796,7 @@
   /* A detail screen belongs to the section it was opened from, so the menu
      still says where you are when you are three clicks deep in one shop. */
   var SECTION_OF = { 'a.app':'a.apps', 'a.req':'a.reqs', 'a.offer':'a.reqs',
-    'a.order':'a.orders', 'a.shop':'a.shops', 'a.cash':'a.shops', 'a.claim':'a.shops', 'r.when':'r.orders', 's.earn':'s.billing' };
+    'a.order':'a.orders', 'a.shop':'a.shops', 'a.cash':'a.shops', 'a.claim':'a.shops', 'a.newshop':'a.shops', 'r.when':'r.orders', 's.earn':'s.billing', 's.reviews':'x.settings' };
   function sectionOf(s){ return SECTION_OF[s] || s; }
 
   var HOME = { reader:'r.requests', seller:'s.feed', ops:'a.work', courier:'c.jobs' };
@@ -1820,7 +1870,7 @@
           '<button class="btn ghost" data-ask="worldreset" data-ask-title="Start over for everyone?" '+
             'data-ask-body="Every request, offer and order made on this link is removed from every phone, and the test goes back to how it started." '+
             'data-ask-label="Start over">Start over for everyone</button></div>'+
-        '<p style="margin:12px 0 0">'+esc('Everyone playing the reader is Dina, everyone playing the bookseller is Aram Books.' +
+        '<p style="margin:12px 0 0">'+esc('Everyone playing the reader is Dina. The bookseller is Aram Books until you pick another shop, or register one, in the bookseller\u2019s Account.' +
           (document.getElementById('roleSel') ? ' Choose your role in the top bar.'
             : ' Open the other roles from the front page, on another phone or in another tab.'))+'</p>'
       : '') +
@@ -1947,8 +1997,10 @@
         '';
     }
 
-    var head = '<button class="back" data-act="rstep:'+(d.rstep-1)+'">← '+
-        (d.rstep===2 ? 'Kind of request' : 'The book')+'</button>'+
+    var head = (d.editing && d.rstep === 2
+        ? '<button class="back" data-go="r.request" data-p="'+esc(d.editing)+'">← The request</button>'
+        : '<button class="back" data-act="rstep:'+(d.rstep-1)+'">← '+(d.rstep===2 ? 'Kind of request' : 'The book')+'</button>')+
+      (d.editing ? '<p class="eyebrow">Editing your request</p>' : '')+
       '<p class="eyebrow">Step '+d.rstep+' of 3</p>'+
       '<h1>'+(d.rstep===2
         ? (d.kind==='concrete' ? 'Which book?' : 'Describe it')
@@ -2008,7 +2060,7 @@
          the shops. It does not publish anything any more — it hands the
          request to us, and we pass it on. A button that names the wrong
          outcome is the cheapest kind of lie to tell and the dearest to keep. */
-      '<button class="btn wide" data-act="publish">Send request</button>';
+      '<button class="btn wide" data-act="publish">'+(d.editing ? 'Send it to us again' : 'Send request')+'</button>';
   }
 
   function scrRequest(){
@@ -2262,7 +2314,9 @@
       (s.reviews.length ? '<div class="rowlist">'+s.reviews.map(function(v){
           return '<div class="row"><div class="grow stack"><div class="wrap-row"><span class="stars">'+stars(v.stars)+'</span>'+
             '<span class="small muted">'+esc(v.by)+' · '+esc(v.when)+'</span></div>'+
-            '<p class="small" style="margin:0;color:var(--muted-foreground)">'+esc(v.text)+'</p></div></div>';
+            '<p class="small" style="margin:0;color:var(--muted-foreground)">'+esc(v.text)+'</p>'+
+            (v.reply ? '<div class="reply"><p class="small" style="margin:0;font-weight:600">'+esc(s.name)+' answered</p>'+
+              '<p class="small" style="margin:2px 0 0">'+esc(v.reply.text)+'</p></div>' : '')+'</div></div>';
         }).join('')+'</div>'
         : '<p class="small muted">No reviews yet.</p>');
   }
@@ -2351,7 +2405,7 @@
         '<div class="two"><label class="f"><span>Name</span><input class="in" id="c_name" value="'+esc(name)+'"></label>'+
         '<label class="f"><span>Phone</span><input class="in" id="c_phone" value="'+esc(phone)+'" inputmode="tel"></label></div>'+
         (anyCourier
-          ? '<label class="f"><span>Address in Yerevan</span><input class="in" id="c_addr" value="'+esc(addr)+'" placeholder="street, building, apartment"></label>'+
+          ? '<label class="f"><span>Address in Yerevan</span><input class="in" id="c_addr" value="'+esc(addr)+'" placeholder="street, building, apartment" data-ph-plain></label>'+
             '<label class="f"><span>Note for the courier (optional)</span>'+
             '<textarea class="in" id="c_note" style="min-height:60px" placeholder="Second entrance, gate code 4417. Call rather than ring.">'+esc(cnote)+'</textarea></label>'+
             '<p class="hint" style="margin-top:-6px">Only the courier sees this note. The bookseller never does.</p>'
@@ -2870,7 +2924,7 @@
   function addDays(ts, n){ return ts + n*DAY; }
 
   function standing(){
-    var a = db.account;
+    var a = acctPeek();
     var trialEnds = addDays(a.trialStart, 30);
     var daysLeft = Math.max(0, Math.ceil((trialEnds - now)/DAY));
     /* the billing day repeats monthly on the day the trial began */
@@ -2889,8 +2943,10 @@
            ten shops.
        The flag is per account and clears the moment a claim is approved. */
     var underCheck = !!a.claim && !(a.claimStrikes > 0);
-    return { state: underCheck ? 'checking' : (a.claim ? a.state : a.state),
-             checking: !!a.claim, raw:a.state, claim:a.claim || null,
+    /* a free month that has run out is simply good standing until a statement says otherwise */
+    var stt = a.state === 'trial' && now >= trialEnds ? 'good' : a.state;
+    return { state: underCheck ? 'checking' : stt,
+             checking: !!a.claim, raw:stt, claim:a.claim || null,
              strikes: a.claimStrikes || 0, reject: a.reject || null,
              rate:0.12, daysLeft:daysLeft, trialEnds:trialEnds,
              billingDay:a.billingDay, nextAt:next.getTime(), period:a.lastPeriod };
@@ -3121,7 +3177,7 @@
   /* Nothing to say once it has been read — until the last three days,
      which is a different sentence and gets its own hearing. */
   function trialSay(st){
-    var ack = db.account.trialAck;
+    var ack = acctPeek().trialAck;
     if (st.daysLeft <= 3)
       return (ack !== null && ack <= 3) ? null
         : '<b>Your free month ends in '+st.daysLeft+' day'+(st.daysLeft === 1 ? '' : 's')+'</b>, then 12% of what you sell.';
@@ -3379,7 +3435,30 @@
         '<h1>'+title+'</h1>'+
         (lead ? '<p class="sub">'+lead+'</p>' : '')+
         (editing || noAsked ? '' : askedCard(r))+
+        (editing ? '' : alreadyOffered())+
         (d.err ? '<div class="err">'+esc(d.err)+'</div>' : '');
+    }
+    /* Adding book 2, 3 … the seller can look back at what is already in this
+       offer, and at what this shop sent the reader earlier, so the same copy
+       is not offered twice. Closed by default: on book 1 of a first offer
+       there is nothing to show and nothing is drawn. */
+    function alreadyOffered(){
+      var sent = db.offers.filter(function(o){ return o.req === r.id && o.seller === db.me.sellerId && o.status !== 'removed' });
+      var all = basket.map(function(bk){ return { bk: bk, where: 'in this offer' } })
+        .concat(sent.map(function(o){ return { bk: o, where: 'sent '+ago(o.sent || now)+' ago' } }));
+      if (!all.length || d.step === 8) return '';
+      var op = view.open === 'already';
+      return '<div class="card asked-card" style="margin-top:-6px">'+
+        '<button class="opens" style="padding:0" data-act="toggle:already" aria-expanded="'+op+'">'+
+          '<span class="disc">'+(op ? '\u25be ' : '\u25b8 ')+esc(tr('Books you have already offered'))+' ('+all.length+')</span></button>'+
+        (op ? '<div style="margin-top:8px">'+all.map(function(x){
+            var bk = x.bk;
+            return '<div class="row" style="gap:12px;align-items:center;padding:6px 0;border:none">'+cover(bk, 's')+
+              '<div class="grow stack" style="gap:2px"><p style="margin:0;font-weight:500">'+esc(bk.title || 'Untitled')+'</p>'+
+              '<p class="small muted" style="margin:0">'+esc(bk.cond || '')+' \u00b7 '+esc(x.where)+'</p></div>'+
+              '<span class="price">'+money(bk.price || 0)+'</span></div>';
+          }).join('')+'</div>' : '')+
+      '</div>';
     }
     var backToBook = '<button class="back" data-act="step:1">← The book</button>';
 
@@ -3707,7 +3786,7 @@
       '<div class="grow stack"><p style="margin:0">'+esc(o.title)+'</p>'+
       '<p class="small muted" style="margin:0">'+money(o.price)+' · '+esc(l.label)+' · sent '+ago(o.sent)+' ago</p>'+
       '<p class="small muted" style="margin:0">→ '+esc((r.title||r.text).slice(0,44))+'…</p>'+
-      (live ? '<div class="wrap-row" style="margin-top:4px">'+
+      (o.review === 'sent back' ? shopBackLine(o, o.reviewWhy) : live ? '<div class="wrap-row" style="margin-top:4px">'+
         '<button class="btn ghost sm" data-act="editoffer:'+o.id+'">Edit</button>'+
         cbtn('btn link','removeoffer:'+o.id,'Sold elsewhere — take down','Yes, it is gone')+'</div>' : '')+
       '</div><span class="chip'+(o.status==='in_cart'?'':' dim')+'">'+label+'</span></div>';
@@ -3853,7 +3932,7 @@
       'An order arrives when a reader takes one of your offers.');
     if (aside.length){
       h += '<div class="codebox" style="margin:0 0 12px;padding-top:10px;padding-bottom:10px"><div class="grow"><p style="margin:0;font-weight:600">Buyer at the counter?</p></div>'+
-        '<div class="wrap-row"><input class="in'+(view.codeErr === 'find' ? ' bad' : '')+'" id="findcode" inputmode="numeric" maxlength="4" placeholder="0000" '+
+        '<div class="wrap-row"><input class="in'+(view.codeErr === 'find' ? ' bad' : '')+'" id="findcode" inputmode="numeric" maxlength="4" placeholder="0000" data-ph-plain '+
           'aria-label="Buyer\'s code" style="width:96px;text-align:center;letter-spacing:.2em">'+
         '<button class="btn sm" data-act="findcode">Find</button></div>'+
         (view.codeErr === 'find' ? '<p class="small bad-t" style="width:100%;margin:0">No order put aside here has that code. Ask them to read it again.</p>' : '')+
@@ -3948,7 +4027,7 @@
     /* the handover comes first when the buyer is standing there */
     if (sb.status==='shipped' && sb.delivery==='pickup' && sb.code){
       h += '<div class="codebox" style="margin:0 0 14px"><div class="grow"><p style="margin:0;font-weight:600">Take '+money(sb.total)+', then type their four digits</p></div>'+
-        '<div class="wrap-row"><input class="in'+(view.codeErr===sb.no?' bad':'')+'" id="code_'+sb.no+'" inputmode="numeric" maxlength="4" placeholder="0000" value="'+esc(view.p.code||'')+'" aria-label="Buyer’s code" style="width:96px;text-align:center;letter-spacing:.2em">'+
+        '<div class="wrap-row"><input class="in'+(view.codeErr===sb.no?' bad':'')+'" id="code_'+sb.no+'" inputmode="numeric" maxlength="4" placeholder="0000" data-ph-plain value="'+esc(view.p.code||'')+'" aria-label="Buyer’s code" style="width:96px;text-align:center;letter-spacing:.2em">'+
         '<button class="btn sm" data-act="entercode:'+o.id+':'+sb.no+'">Done</button></div>'+
         (view.codeErr===sb.no ? '<p class="small bad-t" style="width:100%;margin:0">That is not the code on the buyer’s order. Ask them to read it again.</p>' : '')+
         '</div>';
@@ -4041,25 +4120,45 @@
      and flipping the account to good on the spot was a lie the product told
      itself: it recorded money we had not seen.
      What a shop keeps while we check is decided in `standing()`. */
+  /* Paying the commission: where to send it, in full and copyable, and a
+     photograph of the receipt, which is what an operator matches against
+     the bank. The details below are the prototype's sample ones. */
+  var PAY_TO = { name: 'Shelfcall LLC', bank: 'Ameriabank CJSC', account: '1570 0453 2189 0100',
+                 office: 'Shelfcall office, Abovyan 12, Yerevan', hours: 'Mon–Fri 10–18' };
   function scrPay(){
     var st = standing(), d = view.draft;
     var due = commissionDue();
     var method = d.p_method || 'transfer';
-    var ref = d.p_ref || '';
-    return '<button class="back" data-go="s.billing">\u2190 Billing</button>'+
+    var ref = 'SC-' + st.billingDay + '-' + String(db.me.sellerId).replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase();
+    var line = function(k, v, copy){
+      return '<div class="between" style="padding:7px 0;border-top:1px solid var(--border);gap:10px">'+
+        '<div class="grow stack" style="gap:1px"><span class="small muted">'+esc(k)+'</span><span'+(copy ? ' style="font-variant-numeric:tabular-nums"' : '')+'>'+esc(v)+'</span></div>'+
+        (copy ? '<button class="btn ghost sm" data-act="copy:'+encodeURIComponent(v)+'">Copy</button>' : '')+'</div>';
+    };
+    return '<button class="back" data-go="s.billing">← Billing</button>'+
       '<h1>Pay '+money(due)+'</h1>'+
-      '<p class="sub">Send it, then tell us here. An operator matches it against the bank \u2014 usually the same working day.</p>'+
+      '<p class="sub">Send it, then add a photo of the receipt here. An operator matches it against the bank — usually the same working day.</p>'+
       (d.err ? '<div class="err">'+esc(d.err)+'</div>' : '')+
-      '<div class="card" style="margin-bottom:16px"><p class="eyebrow">Where it goes</p>'+
-        '<p style="margin:0;font-weight:500">Shelfcall LLC \u00b7 AM\u2022\u2022 4821</p>'+
-        '<p class="small muted" style="margin:2px 0 0">Reference <b>SC-'+st.billingDay+'-'+esc(db.me.sellerId).toUpperCase()+'</b> \u2014 put this in the transfer and the match is instant.</p></div>'+
-      '<p class="eyebrow">How you sent it</p>'+
-      '<div class="seg" style="margin-bottom:16px">'+
+      '<div class="seg" style="margin-bottom:12px">'+
         '<button data-act="paymethod:transfer" aria-pressed="'+(method==='transfer')+'">Bank transfer</button>'+
         '<button data-act="paymethod:cash" aria-pressed="'+(method==='cash')+'">Cash at the office</button></div>'+
-      '<label class="f"><span>'+(method==='transfer'?'Transfer reference or the last 4 digits':'Who took it, and when')+'</span>'+
-        '<input class="in" id="p_ref" value="'+esc(ref)+'" placeholder="'+(method==='transfer'?'SC-15-ARAM, or 4821':'Left with Ani, Tuesday morning')+'"></label>'+
-      '<button class="btn wide" data-act="sendclaim">Send for checking</button>'+
+      (method === 'transfer'
+        ? '<div class="card" style="margin-bottom:6px;padding-top:8px"><p class="eyebrow" style="margin:6px 0 2px">Where to send it</p>'+
+            line('Recipient', PAY_TO.name, true)+line('Bank', PAY_TO.bank)+line('Account', PAY_TO.account, true)+
+            line('Amount', money(due).replace(/\s*֏$/, '') + ' AMD', true)+line('Purpose of payment', ref, true)+'</div>'+
+          '<p class="hint" style="margin:0 0 16px">Put '+esc(ref)+' in the purpose and the match is instant.</p>'
+        : '<div class="card" style="margin-bottom:16px;padding-top:8px"><p class="eyebrow" style="margin:6px 0 2px">Where to bring it</p>'+
+            line('Office', PAY_TO.office)+line('Open', PAY_TO.hours)+line('Amount', money(due))+
+            '<p class="small muted" style="margin:8px 0 0">Ask for a receipt and photograph it.</p></div>')+
+      '<p class="eyebrow" style="margin-bottom:6px">Photo of the receipt</p>'+
+      (d.rcpt
+        ? '<img class="thumb lg" src="'+d.rcpt+'" alt="" style="max-height:220px;margin-bottom:8px">'+
+          '<div class="btns" style="margin-bottom:14px"><button class="btn ghost sm" data-act="pickrcpt">Change the photo</button></div>'
+        : '<button class="btn secondary" style="margin-bottom:14px" data-act="pickrcpt">'+PLUS+'Add the photo</button>')+
+      '<input type="file" id="rcptIn" accept="image/*" capture="environment" hidden>'+
+      '<label class="f"><span>'+(method==='transfer'?'Transfer number, if the receipt has one':'Who took it, and when')+'</span>'+
+        '<input class="in" id="p_ref" value="'+esc(d.p_ref || '')+'" placeholder="'+(method==='transfer'?'TRN 004417':'Left with Ani, Tuesday morning')+'"></label>'+
+      '<button class="btn wide" data-act="sendclaim">Send for checking · '+money(due)+'</button>'+
       '<p class="hint" style="margin-top:10px">'+
         (st.strikes
           ? 'Because a claim of yours was not found last time, this one is checked before your access comes back.'
@@ -4080,10 +4179,7 @@
        sale the shop had ever made, which was invisible while there was one
        month of data and plainly wrong the moment there were two: a statement
        for September cannot be 12% of August as well. */
-    var periodFrom = st.state === 'trial'
-      ? db.account.trialStart
-      : (function(){ var d = new Date(now); d.setDate(st.billingDay); d.setHours(0,0,0,0);
-                     if (d.getTime() > now) d.setMonth(d.getMonth()-1); return d.getTime(); })();
+    var per = periodAt(now), periodFrom = per.from;
     var done = [];
     db.orders.forEach(function(o){ o.subs.forEach(function(sb){
       if (sb.seller===db.me.sellerId && sb.status==='completed' && !sb.disputed
@@ -4118,7 +4214,7 @@
       stateCard = '<div class="card" style="border-color:var(--muted-foreground)"><div class="between"><div class="grow stack">'+
         '<p style="margin:0;font-weight:600">'+money(due)+' due today</p>'+
         '<p class="small muted" style="margin:0">Your month \u00b7 '+esc(st.period)+' \u00b7 billed on the '+st.billingDay+'th</p>'+
-        '<p class="small muted" style="margin:0">Transfer to AM\u2022\u2022 4821 \u00b7 reference SC-'+st.billingDay+'</p>'+
+        '<p class="small muted" style="margin:0">Bank details are on the next screen. Attach the receipt there.</p>'+
         '</div><span class="chip">due</span></div>'+
         '<div class="btns" style="margin-top:10px"><button class="btn sm" data-go="s.pay">Pay '+money(due)+'</button>'+
         '<button class="btn ghost sm" data-act="nop">Print</button></div>'+
@@ -4143,19 +4239,18 @@
           '<p style="margin:0;font-weight:600">'+esc(db.couriers[hand.courier].name)+' is handing you '+money(hand.amount)+'</p>'+
           '<p class="small" style="margin:6px 0 0;color:var(--foreground)">For '+hand.subs.length+
             ' order'+(hand.subs.length>1?'s':'')+' \u00b7 '+hand.subs.map(esc).join(' \u00b7 ')+'. '+
-            'Count it first. Typing the code is you saying you have it.</p>'+
-          (view.cashErr
-            ? '<p class="small bad-t" style="margin:6px 0 0">'+esc(view.cashErr)+'</p>' : '')+
-          '<div class="wrap-row" style="margin-top:10px">'+
-            '<input class="in'+(view.cashErr?' bad':'')+'" id="cash_code" inputmode="numeric" maxlength="4" placeholder="0000" '+
-              'style="width:96px;text-align:center;letter-spacing:.2em">'+
-            '<button class="btn sm" data-act="cashok:'+hand.id+'">Got it \u00b7 '+money(hand.amount)+'</button>'+
+            'Count it first. Giving the code is you saying you have it.</p>'+
+          '<div class="codebox" style="margin-top:10px">'+
+            '<div class="grow"><p class="eyebrow" style="margin-bottom:4px">When it is all there, tell '+esc(db.couriers[hand.courier].name)+' this code</p>'+
+            '<span class="code">'+esc(hand.code)+'</span></div>'+
+            '<p class="small" style="margin:0;flex:1;min-width:170px;color:var(--foreground)">'+
+              'They type it on their phone and '+money(hand.amount)+' is recorded for both of you. Without your code they cannot mark it paid.</p>'+
           '</div>'+
           '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">'+
             '<p class="small muted" style="margin:0 0 8px">Counted something else? Put in what you actually took \u2014 '+
               'the two numbers go to us with both your names on them.</p>'+
             '<div class="wrap-row">'+
-              '<input class="in" id="cash_got" inputmode="numeric" placeholder="'+hand.amount+'" style="width:110px">'+
+              '<input class="in" id="cash_got" inputmode="numeric" placeholder="'+hand.amount+'" data-ph-plain style="width:110px">'+
               '<button class="btn ghost sm" data-act="cashodd:'+hand.id+'">That is not the amount</button>'+
             '</div></div>'+
         '</div>'
@@ -4226,24 +4321,16 @@
           }).join('')+'</div>'+moreBtn(opg);
       }
     } else {
-      h += earnCard(sold, 0);
+      var trade = shopTrade();
+      h += periodBlock(per, trade);
       if (!urgent) h += stateCard;
-      h += '<div class="card" style="margin-top:10px"><p class="eyebrow">This period so far · since '+esc(dstr(periodFrom))+'</p>'+
-          '<div class="between"><span class="grow muted small">Sold through Shelfcall</span><span class="price">'+money(base)+'</span></div>'+
+      h += '<div class="card" style="margin-top:10px"><p class="eyebrow">Commission this period · since '+esc(dstr(periodFrom))+'</p>'+
+          '<div class="between"><span class="grow muted small">Handed over to readers</span><span class="price">'+money(base)+'</span></div>'+
           '<div class="between" style="margin-top:6px"><span class="grow muted small">Commission at 12%</span><span class="price">'+money(due)+'</span></div>'+
           (st.state === 'trial' ? '<p class="small muted" style="margin:10px 0 0">Not charged — free month.</p>' : '')+'</div>';
-      h += '<h2 style="margin-bottom:2px">History</h2><p class="small muted" style="margin:0 0 10px">Book money only. Commission is on your statement.</p>';
-      if (!sold.length) h += emptyBox('Nothing sold yet', 'What you take for books shows up here, month by month.');
-      else {
-        var months = groupBy(sold, function(x){ return monKey(doneAt(x.sb)) });
-        h += '<div class="rowlist">'+months.map(function(g){
-          return '<button class="row" data-act="earn:'+g.key+'" style="align-items:center">'+
-            '<div class="grow stack" style="gap:2px"><p style="margin:0;font-weight:600">'+esc(monName(g.key))+'</p>'+
-            '<p class="small muted" style="margin:0">'+g.rows.length+' order'+(g.rows.length>1?'s':'')+
-              (g.waiting ? ' · '+money(g.waiting)+' still owed' : ' · all paid')+'</p></div>'+
-            '<span class="price">'+money(g.books)+'</span><span class="muted" aria-hidden="true">›</span></button>';
-        }).join('')+'</div>';
-      }
+      h += '<h2 style="margin-bottom:2px">History</h2><p class="small muted" style="margin:0 0 10px">Your periods, each one month from the day it began. Book money only; commission is on your statement.</p>';
+      if (!trade.length) h += emptyBox('Nothing sold yet', 'What readers order from you shows up here, period by period.');
+      else h += periodList(trade, true);
     }
 
     h += '<details class="howto" style="margin-top:22px"><summary>How billing works</summary>'+
@@ -4264,93 +4351,194 @@
   /* ---- what came in, day by day ----------------------------------------------
      The same drawing as the admin's week chart: one ink, columns from a zero
      baseline, the newest day labelled, and a tap gives that day's numbers. */
-  function dayRows(sold, from, to){
+  /* ---- billing periods ------------------------------------------------------
+     A period is the month a shop has paid for, or its free month: it starts
+     on the day the free month began and repeats monthly from there, so the
+     screen opens on "since you last paid", not on a calendar month.
+     Everything here is counted on the day the reader ORDERED, whether the
+     book has been handed over or the courier has brought the cash yet:
+     what a shop wants to see first is how much trade came in. Where the
+     money is (in the till, or still coming) is said beside it. */
+  function addMonths(ts, k){
+    var d = new Date(ts), day = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + k);
+    d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));
+    return d.getTime();
+  }
+  function periodK(k, id){
+    id = id || db.me.sellerId;
+    var a = new Date(trialStartOf(id)); a.setHours(0, 0, 0, 0);
+    var from = addMonths(a.getTime(), k), to = addMonths(a.getTime(), k + 1);
+    return { k: k, key: 'p' + k, from: from, to: to, free: from >= a.getTime() && from < trialEndOf(id),
+             before: from < a.getTime(),
+             current: from <= now && now < to, label: dstr(from) + ' – ' + dstrY(to - DAY) };
+  }
+  function periodAt(ts, id){
+    var a = new Date(trialStartOf(id || db.me.sellerId)); a.setHours(0, 0, 0, 0);
+    var k = 0, base = a.getTime();
+    while (addMonths(base, k) > ts) k--;
+    while (addMonths(base, k + 1) <= ts) k++;
+    return periodK(k, id);
+  }
+  function orderedAt(sb){ return sb.placedAt || doneAt(sb) }
+  /* every order of this shop that is still an order, newest first */
+  function shopTrade(id){
+    id = id || db.me.sellerId; var out = [];
+    db.orders.forEach(function(o){ o.subs.forEach(function(sb){
+      if (sb.seller === id && sb.status !== 'cancelled') out.push({ o: o, sb: sb });
+    })});
+    return out.sort(function(a, b){ return orderedAt(b.sb) - orderedAt(a.sb) });
+  }
+  function tradeIn(trade, from, to){
+    return trade.filter(function(x){ var t = orderedAt(x.sb); return t >= from && t < to });
+  }
+  function dayRows(list, from, to){
     var rows = [], idx = {};
     var d = new Date(from); d.setHours(0,0,0,0);
     for (var t = d.getTime(); t <= to; t += DAY){
       var k = dayKey(t); idx[k] = rows.length;
-      rows.push({ key: k, at: t, books: 0, orders: 0 });
+      rows.push({ key: k, at: t, books: 0, orders: 0, coming: 0 });
     }
-    sold.forEach(function(x){
-      var k = dayKey(doneAt(x.sb)); if (idx[k] === undefined) return;
+    list.forEach(function(x){
+      var k = dayKey(orderedAt(x.sb)); if (idx[k] === undefined) return;
       var r = rows[idx[k]]; r.books += x.sb.books; r.orders++;
+      if (shopCash(x.sb) !== 'paid') r.coming += x.sb.books;
     });
     return rows;
   }
-  function dayTip(r){ return dayName2(r.key)+' · '+(r.orders ? r.orders+' order'+(r.orders===1?'':'s')+' · '+money(r.books) : 'nothing sold') }
-  function dayChart(rows, id){
-    var app = document.getElementById('app');
-    var W = Math.round(Math.max(300, Math.min(900, (app && app.clientWidth ? app.clientWidth : 380) - 40)));
-    var H = 150, L = 34, Rt = 18, B = 22, T = 20;   /* room on the right for the newest day's label */
-    var mx = Math.max.apply(null, rows.map(function(r){ return r.books }).concat([0]));
-    var nt = niceTop(Math.max(mx, 1000));
-    var ph = H - B - T, n = rows.length, slot = (W - L - Rt) / n;
-    var bw = Math.min(18, Math.max(3, slot * 0.66));
-    var g = '<g class="grid">';
-    for (var t = 0; t <= nt.top + 1e-9; t += nt.step){
-      var y = T + ph - t / nt.top * ph;
-      g += '<line x1="'+L+'" x2="'+(W - Rt)+'" y1="'+y+'" y2="'+y+'"/><text x="'+(L - 6)+'" y="'+(y + 3.5)+'" text-anchor="end">'+compact(t)+'</text>';
-    }
-    g += '</g>';
-    var k = Math.max(1, Math.ceil(n / 5)), bars = '', last = n - 1;
-    for (var i = n - 1; i >= 0; i--) if (rows[i].books){ last = i; break; }
-    rows.forEach(function(r, i){
-      var v = r.books, x = L + i * slot + (slot - bw) / 2, hh = v / nt.top * ph, y = T + ph - hh, rr = Math.min(3, hh, bw / 2);
-      var d = hh <= 0 ? '' : 'M'+x+','+(T + ph)+' L'+x+','+(y + rr)+' Q'+x+','+y+' '+(x + rr)+','+y+
-        ' L'+(x + bw - rr)+','+y+' Q'+(x + bw)+','+y+' '+(x + bw)+','+(y + rr)+' L'+(x + bw)+','+(T + ph)+' Z';
-      bars += '<g class="bar'+(i === last ? ' on' : '')+'" data-tip="'+esc(dayTip(r))+'">'+
-        '<rect class="hit" x="'+(L + i * slot)+'" y="'+T+'" width="'+slot+'" height="'+ph+'"/>'+
-        (d ? '<path class="b" d="'+d+'"/>' : '')+
-        (i === last && v ? '<text class="val" x="'+(x + bw / 2)+'" y="'+(y - 5)+'" text-anchor="middle">'+compact(v)+'</text>' : '')+
-        ((n - 1 - i) % k === 0 ? '<text x="'+(x + bw / 2)+'" y="'+(H - 6)+'" text-anchor="middle">'+dstr(r.at)+'</text>' : '')+'</g>';
-    });
-    return '<div class="chart" data-readout="rd_'+id+'"><p class="readout" id="rd_'+id+'">'+esc(dayTip(rows[last]))+'</p>'+
-      '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc('Money for books per day, '+n+' days')+'">'+g+bars+'</svg></div>';
+  function dayTip(r){
+    return dayName2(r.key)+' · '+(r.orders
+      ? r.orders+' order'+(r.orders===1?'':'s')+' · '+money(r.books)+(r.coming ? ' · '+money(r.coming)+' still coming' : '')
+      : 'no orders');
   }
-  function earnCard(sold, owedNow){
-    var nd = +P('bd', 30), rows = dayRows(sold, now - (nd - 1) * DAY, now);
-    var tot = sum(rows, function(r){ return r.books }), ord = sum(rows, function(r){ return r.orders });
-    return '<div class="card" style="margin-bottom:14px">'+
-      '<div class="between" style="align-items:flex-start;flex-wrap:wrap;gap:8px">'+
-        '<div class="grow stack" style="gap:2px"><p class="eyebrow" style="margin:0">Earned, last '+nd+' days</p>'+
-          '<p style="margin:0;font-size:24px;line-height:30px;font-weight:600;font-variant-numeric:tabular-nums">'+money(tot)+'</p>'+
-          '<p class="small muted" style="margin:0">'+ord+' order'+(ord===1?'':'s')+' handed over</p></div>'+
-        achips('bd', [['14', '14 days'], ['30', '30 days']], String(nd))+'</div>'+
-      dayChart(rows, 'earn')+
-      '<p class="hint" style="margin:2px 0 0">Tap a day for its numbers.</p>'+
-      (owedNow ? '<p class="small" style="margin:10px 0 0;padding-top:10px;border-top:1px solid var(--border);color:var(--foreground)">'+
-        '<b>'+money(owedNow)+' still owed to you</b> — delivered, the courier still has the cash. See To collect.</p>' : '')+
+  function periodTip(r){
+    return r.label+' · '+(r.orders ? r.orders+' order'+(r.orders===1?'':'s')+' · '+money(r.books) : 'no orders');
+  }
+  /* The chart without its box: no frame, no grid, no scale. The page's own
+     margins are its edges, so the columns get the width the frame and its
+     padding used to take. The highlighted column carries its number; a tap
+     on any other column gives that one's. Days with nothing get a short
+     stub so the days can still be counted. */
+  function bareChart(rows, id, tipFn, labelFn, label){
+    var app = document.getElementById('app');
+    var W = Math.round(Math.max(300, Math.min(900, (app && app.clientWidth ? app.clientWidth : 390) - 32)));
+    var H = 196, B = 20, T = 20, n = Math.max(rows.length, 1), slot = W / n;
+    var bw = Math.min(40, Math.max(5, slot * 0.76));
+    var mx = Math.max.apply(null, rows.map(function(r){ return r.books }).concat([1]));
+    var ph = H - B - T;
+    var on = rows.length - 1;
+    for (var i = rows.length - 1; i >= 0; i--) if (rows[i].books){ on = i; break; }
+    var k = Math.max(1, Math.ceil(n / 5)), bars = '';
+    rows.forEach(function(r, i){
+      var v = r.books, x = i * slot + (slot - bw) / 2, hh = v ? Math.max(3, v / mx * ph) : 2, y = T + ph - hh,
+          rr = v ? Math.min(5, hh, bw / 2) : 0;
+      var d = 'M'+x+','+(T + ph)+' L'+x+','+(y + rr)+' Q'+x+','+y+' '+(x + rr)+','+y+
+        ' L'+(x + bw - rr)+','+y+' Q'+(x + bw)+','+y+' '+(x + bw)+','+(y + rr)+' L'+(x + bw)+','+(T + ph)+' Z';
+      bars += '<g class="bar'+(i === on ? ' on' : '')+'" data-tip="'+esc(tipFn(r))+'">'+
+        '<rect class="hit" x="'+(i * slot)+'" y="0" width="'+slot+'" height="'+H+'"/>'+
+        '<path class="'+(v ? 'b' : 'stub')+'" d="'+d+'"/>'+
+        (i === on && v ? '<text class="val" x="'+(x + bw / 2)+'" y="'+(y - 6)+'" text-anchor="middle">'+compact(v)+'</text>' : '')+
+        ((n - 1 - i) % k === 0 ? '<text x="'+(x + bw / 2)+'" y="'+(H - 4)+'" text-anchor="middle">'+esc(labelFn(r))+'</text>' : '')+'</g>';
+    });
+    return '<div class="chart bare" data-readout="rd_'+id+'"><p class="readout" id="rd_'+id+'">'+esc(tipFn(rows[on] || rows[0]))+'</p>'+
+      '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(label)+'">'+bars+'</svg></div>';
+  }
+  function dayChart(rows, id){
+    return bareChart(rows, id, dayTip, function(r){ return dstr(r.at) }, 'Orders per day, '+rows.length+' days');
+  }
+  /* what the period's days look like: from its first day to today, and at
+     least two weeks wide so one busy day is not one fat block */
+  function periodDays(per, list){
+    var end = Math.min(per.to - DAY, Math.max(now, per.from + 13 * DAY));
+    return dayRows(list, per.from, end);
+  }
+  function periodBlock(per, trade){
+    var list = tradeIn(trade, per.from, per.to);
+    var tot = sum(list, function(x){ return x.sb.books });
+    var coming = sum(list.filter(function(x){ return shopCash(x.sb) !== 'paid' }), function(x){ return x.sb.books });
+    return '<div class="pblock">'+
+      '<p class="eyebrow" style="margin:0">This period · '+esc(per.label)+(per.free ? ' · free month' : '')+'</p>'+
+      '<p style="margin:2px 0 0;font-size:28px;line-height:34px;font-weight:600;font-variant-numeric:tabular-nums">'+money(tot)+'</p>'+
+      '<p class="small muted" style="margin:0">'+list.length+' order'+(list.length===1?'':'s')+
+        (coming ? ' · '+money(tot - coming)+' in your till · '+money(coming)+' still coming' : list.length ? ' · all in your till' : '')+'</p>'+
+      dayChart(periodDays(per, list), 'per')+
+      '<p class="hint" style="margin:0">Each column is the day the reader ordered, paid or not. Tap one for its numbers.</p>'+
       '</div>';
+  }
+  /* the periods, newest first, with "all of them together" on top */
+  function periodList(trade, withAll){
+    var groups = {}, order = [];
+    trade.forEach(function(x){
+      var pr = periodAt(orderedAt(x.sb));
+      if (!groups[pr.key]){ groups[pr.key] = { per: pr, rows: [], books: 0, coming: 0 }; order.push(pr.key); }
+      var g = groups[pr.key]; g.rows.push(x); g.books += x.sb.books;
+      if (shopCash(x.sb) !== 'paid') g.coming += x.sb.books;
+    });
+    var gs = order.map(function(k){ return groups[k] }).sort(function(a, b){ return b.per.from - a.per.from });
+    var row = function(act, title, sub, amount){
+      return '<button class="row" data-act="'+act+'" style="align-items:center">'+
+        '<div class="grow stack" style="gap:2px"><p style="margin:0;font-weight:600">'+title+'</p>'+
+        '<p class="small muted" style="margin:0">'+sub+'</p></div>'+
+        '<span class="price">'+money(amount)+'</span><span class="muted" aria-hidden="true">›</span></button>';
+    };
+    var all = sum(gs, function(g){ return g.books });
+    return '<div class="rowlist">'+
+      (withAll ? row('earn:all', esc(tr('All periods together')), gs.length+' period'+(gs.length===1?'':'s')+' · '+trade.length+' order'+(trade.length===1?'':'s'), all) : '')+
+      gs.map(function(g){
+        return row('earn:'+g.per.key, esc(g.per.label)+(g.per.current ? ' · '+esc(tr('now')) : ''),
+          g.rows.length+' order'+(g.rows.length>1?'s':'')+(g.per.free ? ' · free month' : g.per.before ? ' · before your free month' : '')+
+            (g.coming ? ' · '+money(g.coming)+' still coming' : ' · all in your till'), g.books);
+      }).join('')+'</div>';
   }
 
   /* ---- the history, on its own screen -----------------------------------------
      A month, then a day, each a page of its own with one way back, so the
      Billing screen never grows when someone reads the past. */
   function scrEarn(){
-    var st = standing(), sold = soldSubs(), mon = view.p.mon, day = view.p.day;
-    if (!mon) return scrBilling();
-    var months = groupBy(sold, function(x){ return monKey(doneAt(x.sb)) });
-    var mg = months.filter(function(g){ return g.key === mon })[0] || { rows:[], books:0, paid:0, waiting:0 };
-    var days = groupBy(mg.rows, function(x){ return dayKey(doneAt(x.sb)) });
-    if (!day){
-      var a = mon.split('-'), first = new Date(+a[0], +a[1] - 1, 1).getTime(), lastD = Math.min(now, new Date(+a[0], +a[1], 0).getTime());
+    var st = standing(), trade = shopTrade(), key = view.p.mon, day = view.p.day;
+    if (!key) return scrBilling();
+    if (key === 'all'){
+      var gsAll = {}, ks = [];
+      trade.forEach(function(x){ var pr = periodAt(orderedAt(x.sb)); if (!gsAll[pr.key]){ gsAll[pr.key] = pr; ks.push(pr) } });
+      ks.sort(function(a, b){ return a.from - b.from });
+      /* one column per period, every period from the first to this one */
+      var cols = [];
+      if (ks.length) for (var kk = ks[0].k; kk <= periodAt(now).k; kk++){
+        var pk = periodK(kk), lst = tradeIn(trade, pk.from, pk.to);
+        cols.push({ label: pk.label, at: pk.from, key: pk.key, books: sum(lst, function(x){ return x.sb.books }), orders: lst.length });
+      }
+      var totA = sum(trade, function(x){ return x.sb.books });
       return '<button class="back" data-go="s.billing">← Billing</button>'+
-        '<h1>'+esc(monName(mon))+'</h1>'+
-        '<p class="sub">'+mg.rows.length+' order'+(mg.rows.length>1?'s':'')+' · '+money(mg.books)+' for books · '+money(mg.paid)+' in your till'+
-          (mg.waiting ? ' · '+money(mg.waiting)+' still owed' : '')+'</p>'+
-        '<div class="card" style="margin-bottom:16px">'+dayChart(dayRows(mg.rows, first, lastD), 'mon')+'</div>'+
-        '<div class="rowlist">'+days.map(function(g){
-          return '<button class="row" data-act="earn:'+mon+':'+g.key+'" style="align-items:center">'+
+        '<h1>'+esc(tr('All periods together'))+'</h1>'+
+        '<p class="sub">'+trade.length+' order'+(trade.length===1?'':'s')+' · '+money(totA)+' for books, since '+(ks.length ? esc(dstrY(ks[0].from)) : '—')+'</p>'+
+        (cols.length ? bareChart(cols, 'all', periodTip, function(r){ return dstr(r.at) }, 'Orders per period, '+cols.length+' periods') : '')+
+        '<h2 style="margin:18px 0 8px">Periods</h2>'+periodList(trade, false);
+    }
+    var per = periodK(+String(key).replace(/^p/, '') || 0);
+    var list = tradeIn(trade, per.from, per.to);
+    var days = groupBy(list, function(x){ return dayKey(orderedAt(x.sb)) });
+    var coming = sum(list.filter(function(x){ return shopCash(x.sb) !== 'paid' }), function(x){ return x.sb.books });
+    var tot = sum(list, function(x){ return x.sb.books });
+    if (!day){
+      return '<button class="back" data-go="s.billing">← Billing</button>'+
+        '<p class="eyebrow">'+(per.current ? 'This period' : per.free ? 'Free month' : per.before ? 'Before your free month' : 'Period')+'</p>'+
+        '<h1>'+esc(per.label)+'</h1>'+
+        '<p class="sub">'+list.length+' order'+(list.length===1?'':'s')+' · '+money(tot)+' for books'+
+          (coming ? ' · '+money(coming)+' still coming' : '')+'</p>'+
+        dayChart(periodDays(per, list), 'mon')+
+        (list.length ? '<div class="rowlist" style="margin-top:14px">'+days.map(function(g){
+          var gc = sum(g.rows.filter(function(x){ return shopCash(x.sb) !== 'paid' }), function(x){ return x.sb.books });
+          return '<button class="row" data-act="earn:'+per.key+':'+g.key+'" style="align-items:center">'+
             '<div class="grow stack" style="gap:2px"><p style="margin:0;font-weight:600">'+esc(dayName2(g.key))+'</p>'+
             '<p class="small muted" style="margin:0">'+g.rows.length+' order'+(g.rows.length>1?'s':'')+
-              (g.waiting ? ' · '+money(g.waiting)+' still owed' : ' · all paid')+'</p></div>'+
+              (gc ? ' · '+money(gc)+' still coming' : ' · all in your till')+'</p></div>'+
             '<span class="price">'+money(g.books)+'</span><span class="muted" aria-hidden="true">›</span></button>';
-        }).join('')+'</div>';
+        }).join('')+'</div>' : emptyBox('No orders in this period', 'Orders show up here on the day the reader places them.'));
     }
-    var dg = days.filter(function(g){ return g.key === day })[0] || { rows:[], books:0, paid:0, waiting:0 };
-    return '<button class="back" data-act="earn:'+mon+'">← '+esc(monName(mon))+'</button>'+
+    var dg = days.filter(function(g){ return g.key === day })[0] || { rows:[], books:0 };
+    var dc = sum(dg.rows.filter(function(x){ return shopCash(x.sb) !== 'paid' }), function(x){ return x.sb.books });
+    return '<button class="back" data-act="earn:'+per.key+'">← '+esc(per.label)+'</button>'+
       '<h1>'+esc(dayName2(day))+'</h1>'+
-      '<p class="sub">'+money(dg.books)+' for books · '+money(dg.paid)+' in your till'+(dg.waiting ? ' · '+money(dg.waiting)+' still owed' : '')+'</p>'+
+      '<p class="sub">'+money(dg.books)+' ordered · '+money(dg.books - dc)+' in your till'+(dc ? ' · '+money(dc)+' still coming' : '')+'</p>'+
       '<div class="stack-list">'+dg.rows.map(function(x){
         var sb = x.sb, l = loc(sb.seller, sb.loc);
         return '<div class="card">'+
@@ -4366,7 +4554,7 @@
               '<span class="price">'+money(b.price)+'</span></div>';
           }).join('')+
           '<div class="between" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">'+
-            '<span class="grow small muted">'+(shopCash(sb)==='paid' ? 'In your till' : 'Still owed to you')+'</span>'+
+            '<span class="grow small muted">'+(shopCash(sb)==='paid' ? 'In your till' : 'Still coming to you')+'</span>'+
             '<span class="price">'+money(sb.books)+'</span></div>'+
           '<p class="small muted" style="margin:6px 0 0">Commission on this one: '+money(Math.round(sb.books*st.rate))+'</p>'+
           '</div>'+
@@ -4375,27 +4563,6 @@
             '<button class="btn ghost sm" data-act="flagline:'+sb.no+'">Something is wrong</button>'+
           '</div></div>';
       }).join('')+'</div>';
-  }
-
-  /* ---- the shop's own results ------------------------------------------------
-     The same four steps the admin reads, about this shop only, against the
-     average of all shops. No other shop is named: an average says "you can do
-     better" without turning a neighbour into a scoreboard. */
-  function scrSellerStats(){
-    var wk = String(+P('wk', 4)), F = funnels(effFrom());
-    var me = db.me.sellerId, f = F.by[me] || emptyFunnel(), s = seller(me), rt = rating(s);
-    var h = '<h1>'+esc(tr('Results'))+'</h1><p class="sub">How your shop answers the requests that reach it.</p>'+
-      achips('wk', [['4', '4 weeks'], ['12', '12 weeks'], ['0', 'All time']], wk);
-    if (!f.reached) return h + emptyBox('Nothing has reached you yet', 'Once requests start reaching your feed, this shows how many you open, answer and sell.',
-      '<button class="btn" data-go="s.feed">'+esc(tr('Feed'))+'</button>');
-    var waiting = db.requests.filter(function(r){
-      return r.status === 'open' && reqLive(r) && !(r.seenBy && r.seenBy[me]) && (s.missed || []).indexOf(r.id) < 0 && !answered(r.id);
-    }).length;
-    h += funnelSay(f, true) + funnelBars(f, F.all, true) + funnelTip(f, F.all);
-    h += '<div class="btns">'+
-      (waiting ? '<button class="btn" data-go="s.feed">'+waiting+' request'+(waiting === 1 ? '' : 's')+' waiting in your feed</button>' : '')+
-      '<button class="btn ghost" data-go="s.reviews">'+esc(tr('Reviews'))+(rt ? ' · '+rt.toFixed(1)+' ★ ('+s.reviews.length+')' : '')+'</button></div>';
-    return h;
   }
 
   function scrSellerReviews(){
@@ -4420,11 +4587,25 @@
             '<span style="display:block;height:100%;width:'+pct+'%;background:var(--muted-foreground)"></span></span>'+
           '<span style="width:22px;text-align:right;color:var(--muted-foreground)">'+c+'</span></div>';
       }).join('')+'</div></div>';
-    h += '<div class="stack-list" style="margin-top:14px">'+sl.reviews.map(function(v){
+    /* One answer per review, in public, under the review itself. The shop
+       can change its answer; it cannot remove the review. */
+    h += '<div class="stack-list" style="margin-top:14px">'+sl.reviews.map(function(v, i){
+      var editing = String(view.p.rv) === String(i);
       return '<div class="card"><div class="wrap-row" style="margin-bottom:6px">'+
         '<span class="stars">'+stars(v.stars)+'</span>'+
         '<span class="small muted">'+esc(v.by)+' \u00b7 '+esc(v.when)+'</span></div>'+
         (v.text ? '<p style="margin:0;color:var(--muted-foreground)">'+esc(v.text)+'</p>' : '<p class="small muted" style="margin:0">No comment left.</p>')+
+        (editing
+          ? '<label class="f" style="margin:12px 0 8px"><span>Your answer</span>'+
+              '<textarea class="in" id="rp_text" style="min-height:90px" placeholder="Thank you — glad the edition was the right one.">'+esc(v.reply ? v.reply.text : '')+'</textarea></label>'+
+            '<p class="small muted" style="margin:0 0 8px">Every reader who opens your shop sees it under this review.</p>'+
+            '<div class="btns"><button class="btn sm" data-act="revpost:'+i+'">Post the answer</button>'+
+            '<button class="btn ghost sm" data-act="revcancel">Cancel</button></div>'
+          : v.reply
+            ? '<div class="reply"><p class="small" style="margin:0;font-weight:600">Your answer \u00b7 '+esc(dstr(v.reply.at))+'</p>'+
+                '<p class="small" style="margin:2px 0 0">'+esc(v.reply.text)+'</p></div>'+
+              '<div class="btns" style="margin-top:8px"><button class="btn ghost sm" data-act="revopen:'+i+'">Change the answer</button></div>'
+            : (v.text ? '<div class="btns" style="margin-top:10px"><button class="btn ghost sm" data-act="revopen:'+i+'">Answer</button></div>' : ''))+
       '</div>';
     }).join('')+'</div>';
 
@@ -4515,7 +4696,7 @@
     if (st && st.state === 'mismatch') return 'disputed';
     return 'waiting';
   }
-  var CASH_WORD = { paid:'paid', counting:'handing over now',
+  var CASH_WORD = { none:'not handed over yet', paid:'paid', counting:'handing over now',
                     disputed:'amounts disagree', waiting:'waiting for cash' };
   function doneAt(sb){ return sb.doneAt || sb.placedAt || now; }
   function pad2(x){ return (x<10?'0':'')+x }
@@ -4571,8 +4752,10 @@
      A courier settling up with a shop is the one moment in this product where
      cash changes hands between two people who both work here, with nothing
      but their word for it. So it is not a tap. It is a code, the same shape
-     as the pickup code a reader reads out: the courier starts the handover
-     and the app gives them four digits; the shop types them in. Both are
+     as the pickup code a reader reads out: the courier starts the handover,
+     the shop gets four digits once the pile is in front of it, and gives
+     them to the courier, who types them in. The code is the shop's, so a
+     courier cannot record a payment the shop has not agreed to. Both are
      standing at the counter, the money is on it, and the record is made by
      the two of them at once.
 
@@ -4899,14 +5082,20 @@
                counts out a single pile of notes and the shop takes a single
                pile; three buttons for three orders describes a thing that is
                not happening. */
+            /* The code is the SHOP's: it appears on their Billing once they
+               have the pile in front of them, and the courier types it here.
+               A courier cannot mark money as handed over on their own. */
             if (open)
-              return '<div class="codebox" style="margin-top:10px">'+
-                '<div class="grow"><p class="eyebrow" style="margin-bottom:4px">Read this out</p>'+
-                '<span class="code">'+esc(open.code)+'</span></div>'+
-                '<p class="small" style="margin:0;flex:1;min-width:170px;color:var(--foreground)">'+
-                  'They type it on their side and '+money(open.amount)+' is recorded, by both of you, now. '+
-                  'Until they do, this money is still yours.</p>'+
-                '<div class="btns" style="width:100%">'+
+              return '<div class="note hard" style="margin-top:10px">'+
+                '<p class="small" style="margin:0;color:var(--foreground)">Count out '+money(open.amount)+' and ask '+esc(r.name)+
+                  ' for the four-digit code on their Billing screen. Until you type it, this money is still yours.</p>'+
+                (view.cashErr
+                  ? '<p class="small bad-t" style="margin:6px 0 0">'+esc(view.cashErr)+'</p>' : '')+
+                '<div class="wrap-row" style="margin-top:10px">'+
+                  '<input class="in'+(view.cashErr?' bad':'')+'" id="c_code" inputmode="numeric" maxlength="4" placeholder="0000" data-ph-plain '+
+                    'style="width:96px;text-align:center;letter-spacing:.2em" aria-label="Code from the shop">'+
+                  '<button class="btn sm" data-act="csettledone:'+open.id+'">Handed over \u00b7 '+money(open.amount)+'</button></div>'+
+                '<div class="btns" style="margin-top:8px">'+
                   '<button class="btn ghost sm" data-act="csettlestop:'+open.id+'">Not now \u2014 cancel</button></div>'+
               '</div>';
             return odd + '<div class="btns" style="margin-top:8px">'+
@@ -5064,7 +5253,7 @@
     var mism = db.settles.filter(function(s){ return s.state === 'mismatch' });
     var open = db.settles.filter(function(s){ return s.state === 'open' });
     var flagged = allSubs().filter(function(x){ return x.sb.disputed && !x.sb.resolved });
-    var c = db.account.claim;
+    var cs = claimShops(), c = cs.length ? acctPeek(cs[0]).claim : null;
     return [
       { n: apps.length, ttl: 'Shop applications to check', at: oldestOf(apps, function(a){ return a.at }),
         act: navAct('a.apps', 'waiting') },
@@ -5072,7 +5261,7 @@
         act: rq.length === 1 ? null : navAct('a.reqs', 'mod'), go: rq.length === 1 ? ['a.req', rq[0].id] : null },
       { n: of.length, ttl: 'Offers to check', at: oldestOf(of, function(o){ return o.sent }),
         act: of.length === 1 ? null : navAct('a.reqs', 'mod'), go: of.length === 1 ? ['a.offer', of[0].id] : null },
-      { n: c ? 1 : 0, ttl: 'A payment to match against the bank', at: c ? c.at : null, go: ['a.claim', 'claim'] },
+      { n: cs.length, ttl: cs.length > 1 ? 'Payments to match against the bank' : 'A payment to match against the bank', at: c ? c.at : null, go: ['a.claim', cs[0] || ''] },
       { n: mism.length, ttl: 'Handovers where the two counts differ', at: oldestOf(mism, function(s){ return s.doneAt || s.at }),
         go: mism.length ? ['a.cash', mism[0].id] : null, act: mism.length > 1 ? navAct('a.shops', 'open', 'money') : null },
       { n: open.length, ttl: 'Handovers counting, not signed', at: oldestOf(open, function(s){ return s.at }),
@@ -5958,7 +6147,7 @@
   function shopFacts(id){
     var sl = seller(id), E = shopEarnings(id), T = shopTerms(id), inv = invoicesFor(id);
     var unpaid = inv.filter(function(x){ return x.state === 'due' });
-    var claim = id === db.me.sellerId ? db.account.claim : null;
+    var claim = acctPeek(id).claim || null;
     var cash = db.settles.filter(function(s){ return s.seller === id && (s.state === 'mismatch' || s.state === 'open') });
     var flag = claim ? ['claim to check', 'bad'] : cash.some(function(s){ return s.state === 'mismatch' }) ? ['counts differ', 'bad']
       : unpaid.length ? ['statement unpaid', 'bad'] : sl.suspended ? ['suspended', 'bad']
@@ -5968,7 +6157,7 @@
   }
   function scrOpsShops(){
     var seg = P('seg', 'open'), f = P('f', 'all'), sort = P('sort', 'sold');
-    var ids = Object.keys(db.sellers);
+    var ids = Object.keys(db.sellers).filter(function(k){ return !db.sellers[k].pending });
     var facts = {}; ids.forEach(function(k){ facts[k] = shopFacts(k) });
     var bySeg = ids.filter(function(k){ return seg === 'suspended' ? db.sellers[k].suspended : !db.sellers[k].suspended });
     var fit = {
@@ -5989,7 +6178,8 @@
     };
     list.sort(SORT[sort] || SORT.sold);
     var pg = paged(list);
-    var h = '<h1>Shops</h1>'+
+    var h = '<div class="between" style="align-items:center"><h1 class="grow">Shops</h1>'+
+        '<button class="btn secondary sm" data-go="a.newshop">'+PLUS+'Open a shop</button></div>'+
       aseg('seg', [['open', 'Open', ids.filter(function(k){ return !db.sellers[k].suspended }).length],
                    ['suspended', 'Suspended', ids.filter(function(k){ return db.sellers[k].suspended }).length]], seg)+
       achips('f', [['all', 'All', bySeg.length], ['money', 'Money to settle', cnt('money')],
@@ -6039,7 +6229,7 @@
       line('They owe us', F.unpaid.length ? money(sum(F.unpaid, function(x){ return x.amount })) : 'nothing', F.unpaid.length ? 'bad-t' : '')+
       (F.unpaid.length ? '<p class="small muted" style="margin:0">'+F.unpaid.map(function(x){ return 'statement of '+dstr(x.issuedAt)+' unpaid' }).join(' · ')+'</p>' : '')+
     '</div>'+
-    (F.claim ? '<button class="row" style="margin-top:10px;border:1px solid var(--border);border-radius:var(--radius-lg)" data-go="a.claim" data-p="claim">'+
+    (F.claim ? '<button class="row" style="margin-top:10px;border:1px solid var(--border);border-radius:var(--radius-lg)" data-go="a.claim" data-p="'+F.sl.id+'">'+
       '<span class="grow" style="font-weight:600">They say they paid '+money(F.claim.amount)+'</span><span class="chip bad">to check</span></button>' : '')+
     F.cash.map(function(s){
       return '<button class="row" style="margin-top:10px;border:1px solid var(--border);border-radius:var(--radius-lg)" data-go="a.cash" data-p="'+s.id+'">'+
@@ -6070,7 +6260,7 @@
     h += '<h2>Profile</h2>'+shopProfile(sl);
     h += '<h2>Standing</h2>'+
       '<label class="f"><span>Reason</span>'+
-        '<input class="in" id="op_why" placeholder="'+(sl.suspended ? 'What changed' : 'What they did')+'"></label>'+
+        '<input class="in" id="op_why" placeholder="'+(sl.suspended ? 'What changed' : 'What they did')+'" data-ph-plain></label>'+
       '<div class="btns">'+
         (sl.suspended
           ? '<button class="btn" data-act="opsunsuspend:'+sl.id+'">Let them back in</button>'
@@ -6081,25 +6271,59 @@
     return h + logBlock('shop', sl.id) + (app && app.id !== sl.id ? logBlock('shop', app.id) : '');
   }
 
+  /* ---- the office opens a shop itself ------------------------------------
+     For a shop that signed up on paper, at a fair, or over the phone: the
+     office types it in and it is open at once, with its free month starting
+     today. Two short steps, the shop and then its first branch, so neither
+     screen is longer than a heading and four fields. */
+  function scrOpsNewShop(){
+    var d = view.draft;
+    if (!d.ns) d.ns = 1;
+    var head = function(title){
+      return (d.ns === 1 ? '<button class="back" data-go="a.shops">\u2190 Shops</button>'
+                         : '<button class="back" data-act="nsstep:1">\u2190 The shop</button>')+
+        '<p class="eyebrow">Step '+d.ns+' of 2</p><h1>'+title+'</h1>'+
+        (d.err ? '<div class="err">'+esc(d.err)+'</div>' : '');
+    };
+    if (d.ns === 1)
+      return head('Open a shop')+
+        '<p class="sub">It opens as soon as you finish \u2014 no application, its free month starts today.</p>'+
+        '<label class="f"><span>Shop name</span><input class="in" id="ns_name" value="'+esc(d.ns_name||'')+'" placeholder="Tsolak Books"></label>'+
+        '<label class="f"><span>Owner\u2019s email</span><input class="in" id="ns_email" inputmode="email" value="'+esc(d.ns_email||'')+'" placeholder="tsolak@example.am"></label>'+
+        '<label class="f"><span>About the shop</span><textarea class="in" id="ns_bio" style="min-height:90px" placeholder="Antiquarian and art books, mostly Armenian imprints.">'+esc(d.ns_bio||'')+'</textarea></label>'+
+        '<button class="btn wide" data-act="nsstep:2">Continue</button>';
+    return head('Its first branch')+
+      '<label class="f"><span>Name this place</span><input class="in" id="ns_label" value="'+esc(d.ns_label||'')+'" placeholder="Mashtots branch"></label>'+
+      '<label class="f"><span>Street address in Yerevan</span><input class="in" id="ns_addr" value="'+esc(d.ns_addr||'')+'" placeholder="Mashtots 118"></label>'+
+      '<label class="f"><span>Opening hours</span><input class="in" id="ns_hours" value="'+esc(d.ns_hours||'')+'" placeholder="Mon\u2013Sat 10\u201319"></label>'+
+      '<div class="switch" style="border:0;padding:0;margin-bottom:16px"><div class="grow"><p>Buyers may collect here</p>'+
+        '<p class="sub2">Turn this off for a warehouse or a flat</p></div>'+
+        '<button class="tog" aria-pressed="'+(d.ns_pickup!==false)+'" data-act="nspickup" aria-label="Pickup allowed"><span></span></button></div>'+
+      '<button class="btn wide" data-act="opsnewshop">Open the shop</button>';
+  }
+
   /* ---- money ----------------------------------------------------------- */
   function scrOpsClaim(){
-    var c = db.account.claim;
+    var cid = view.p.id && acctPeek(view.p.id).claim ? view.p.id : claimShops()[0];
+    var c = cid ? acctPeek(cid).claim : null;
     if (!c) return scrOpsWork();
-    return '<button class="back" data-go="a.shop" data-p="'+db.me.sellerId+'">← '+esc(seller(db.me.sellerId).name)+'</button>'+
+    view.p.id = cid;
+    return '<button class="back" data-go="a.shop" data-p="'+cid+'">← '+esc(seller(cid).name)+'</button>'+
       '<h1>'+money(c.amount)+' claimed</h1>'+
-      '<p class="sub">'+esc(seller(db.me.sellerId).name)+' says it has paid its commission. Match it against the bank — nothing here moves money, it decides whose account of it stands.</p>'+
+      (c.photo ? '<img class="thumb lg" src="'+c.photo+'" alt="'+esc(tr('Receipt photo'))+'" style="max-height:320px;margin:0 0 14px">' : '')+
+      '<p class="sub">'+esc(seller(cid).name)+' says it has paid its commission. Match it against the bank — nothing here moves money, it decides whose account of it stands.</p>'+
       '<div class="card" style="margin-bottom:16px">'+
         '<div class="between" style="padding:3px 0"><span class="small muted grow">How</span><span class="small">'+
           esc(c.method === 'transfer' ? 'bank transfer' : 'cash at the office')+'</span></div>'+
         '<div class="between" style="padding:3px 0"><span class="small muted grow">Reference</span><span class="small">'+esc(c.ref || 'none given')+'</span></div>'+
         '<div class="between" style="padding:3px 0"><span class="small muted grow">Said</span><span class="small">'+ago(c.at)+' ago</span></div>'+
-        '<div class="between" style="padding:3px 0"><span class="small muted grow">Claims not found before</span><span class="small">'+(db.account.claimStrikes || 0)+'</span></div>'+
+        '<div class="between" style="padding:3px 0"><span class="small muted grow">Claims not found before</span><span class="small">'+(acctPeek(cid).claimStrikes || 0)+'</span></div>'+
       '</div>'+
       '<label class="f"><span>Why</span><input class="in" id="op_why" placeholder="Found it — SC-15-ARAM, Tuesday"></label>'+
       '<div class="btns"><button class="btn" data-act="opsclaimok">Found it · clear the account</button>'+
       '<button class="btn ghost" data-act="opsclaimno">Not found</button></div>'+
       '<p class="hint" style="margin-top:10px">A shop whose claim was not found once is checked before its access comes back the next time.</p>'+
-      logBlock('claim', 'claim');
+      logBlock('claim', cid);
   }
 
   function scrOpsCash(){
@@ -6109,7 +6333,7 @@
     var back = '<button class="back" data-go="a.shop" data-p="'+st.seller+'">← '+esc(sn)+'</button>';
     if (st.state === 'open')
       return back + '<h1>Counting now</h1>'+
-        '<p class="sub">'+esc(cn)+' started handing '+money(st.amount)+' to '+esc(sn)+' '+ago(st.at)+' ago, and '+esc(sn)+' has not signed it yet. '+
+        '<p class="sub">'+esc(cn)+' started handing '+money(st.amount)+' to '+esc(sn)+' '+ago(st.at)+' ago, and has not typed '+esc(sn)+'\u2019s code yet. '+
         'Nothing is recorded until they do. If it stays like this, call them both.</p>'+logBlock('cash', st.id);
     return back +
       '<h1>Two numbers</h1>'+
@@ -6122,7 +6346,7 @@
           '<span class="small">'+st.subs.map(esc).join(' · ')+'</span></div>'+
       '</div>'+
       '<label class="f"><span>What you settled on, and why</span>'+
-        '<input class="in" id="op_amt" inputmode="numeric" placeholder="'+st.got+'" style="margin-bottom:10px">'+
+        '<input class="in" id="op_amt" inputmode="numeric" placeholder="'+st.got+'" data-ph-plain style="margin-bottom:10px">'+
         '<input class="in" id="op_why" placeholder="Both counted again on the phone — one note stuck"></label>'+
       '<button class="btn wide" data-act="opscash:'+st.id+'">Record this amount as handed over</button>'+
       '<p class="hint" style="margin-top:10px">This is the one place in the product where a person writes a money line by hand. It goes in with your name on it.</p>'+
@@ -6316,6 +6540,11 @@
   function notifications(){
     var out = [];
     if (db.me.role === 'reader'){
+      myRequests().forEach(function(r){
+        if (r.review === 'sent back')
+          out.push({ ts: r.backAt || r.posted, text:'We sent <b>'+esc(r.title || 'your request')+'</b> back to you',
+                     sub: esc(r.reviewWhy || '')+' \u00b7 edit it and send it again', go:'r.request', p:r.id });
+      });
       db.offers.forEach(function(o){
         var r = req(o.req);
         if (!r || r.reader !== db.me.readerId) return;
@@ -6357,6 +6586,9 @@
                    sub:esc((r.title || r.text).slice(0,44))+(((r.title||r.text).length > 44) ? '\u2026' : '') });
       });
       myOffers().forEach(function(o){
+        if (o.review === 'sent back')
+          out.push({ ts: o.backAt || o.sent, text:'We sent your <b>'+esc(o.title)+'</b> back',
+                     sub: esc(o.reviewWhy || '')+' \u00b7 fix it and send it again', go:'s.offers' });
         if (o.status === 'in_cart') out.push({ ts:o.sent+1, text:'Your <b>'+esc(o.title)+'</b> is in a cart', sub:'not ordered yet', go:'s.request', p:o.req });
         if (o.status === 'done_sold' && now - o.sent < 7*DAY) out.push({ ts:o.sent+2, text:'You sold <b>'+esc(o.title)+'</b>', sub:money(o.price), go:'s.orders',
           g:'sold', gtext:function(n){ return 'You sold <b>'+n+' books</b> this week' }, gsub:'each one is an order to hand over', ggo:'s.orders' });
@@ -6377,7 +6609,7 @@
       db.settles.forEach(function(stN){
         if (stN.seller !== db.me.sellerId || stN.state !== 'open' || !db.couriers[stN.courier]) return;
         out.push({ ts: stN.at || now, text: esc(db.couriers[stN.courier].name)+' is handing you '+money(stN.amount),
-                   sub: 'type the code they read out, on Billing', go: 's.billing' });
+                   sub: 'count it, then give them the code on Billing', go: 's.billing' });
       });
       var st2 = standing();
       if (st2.state === 'due') out.push({ ts: now - 20*HOUR, text:'Your statement is <b>due today</b>', sub:'reminded yesterday with the amount', go:'s.billing' });
@@ -6715,7 +6947,62 @@
       "Add location":"Добавить точку",
       "Add photo":"Добавить фото",
       "Add to cart":"В корзину",
-      "type the code they read out, on Billing":"введите код, который вам назовут, в разделе «Счёт»",
+      "All periods together":"Все периоды вместе",
+      "now":"сейчас",
+      "Each column is the day the reader ordered, paid or not. Tap one for its numbers.":"Каждый столбик — день, когда читатель сделал заказ, оплачен он или нет. Нажмите, чтобы увидеть цифры.",
+      "Handed over to readers":"Передано читателям",
+      "Your periods, each one month from the day it began. Book money only; commission is on your statement.":"Ваши периоды, каждый — месяц со дня начала. Только деньги за книги; комиссия — в счёте.",
+      "What readers order from you shows up here, period by period.":"Здесь по периодам появляется то, что у вас заказывают читатели.",
+      "Periods":"Периоды",
+      "Free month":"Бесплатный месяц",
+      "Before your free month":"До бесплатного месяца",
+      "Period":"Период",
+      "This period":"Этот период",
+      "No orders in this period":"В этом периоде заказов нет",
+      "Orders show up here on the day the reader places them.":"Заказы появляются здесь в день, когда читатель их оформил.",
+      "Still coming to you":"Ещё придёт к вам",
+      "not handed over yet":"ещё не передано",
+      "Answer":"Ответить",
+      "Change the answer":"Изменить ответ",
+      "Post the answer":"Опубликовать ответ",
+      "Your answer":"Ваш ответ",
+      "Every reader who opens your shop sees it under this review.":"Каждый читатель, открывший ваш магазин, увидит его под этим отзывом.",
+      "Write the answer first":"Сначала напишите ответ",
+      "Edit it and send again":"Изменить и отправить снова",
+      "Send it as it is":"Отправить как есть",
+      "The same words will come back the same way, so edit it if you can.":"Те же слова вернутся так же, поэтому лучше их изменить.",
+      "Editing your request":"Редактирование запроса",
+      "← The request":"← Запрос",
+      "Where to send it":"Куда отправить",
+      "Where to bring it":"Куда принести",
+      "Recipient":"Получатель",
+      "Bank":"Банк",
+      "Amount":"Сумма",
+      "Purpose of payment":"Назначение платежа",
+      "Office":"Офис",
+      "Copy":"Скопировать",
+      "Copied":"Скопировано",
+      "Photo of the receipt":"Фото чека",
+      "Add the photo":"Добавить фото",
+      "Change the photo":"Заменить фото",
+      "Transfer number, if the receipt has one":"Номер перевода, если он есть в чеке",
+      "Ask for a receipt and photograph it.":"Попросите чек и сфотографируйте его.",
+      "Send it, then add a photo of the receipt here. An operator matches it against the bank — usually the same working day.":"Отправьте платёж и добавьте сюда фото чека. Оператор сверит его с банком — обычно в тот же рабочий день.",
+      "Add a photo of the receipt — it is how we find the payment.":"Добавьте фото чека — по нему мы находим платёж.",
+      "Bank details are on the next screen. Attach the receipt there.":"Реквизиты — на следующем экране. Там же прикрепите чек.",
+      "Receipt photo":"Фото чека",
+      "This phone is":"Этот телефон —",
+      "Register a new shop":"Зарегистрировать новый магазин",
+      "Each phone can be a different shop, so two shops can answer the same request.":"Каждый телефон может быть отдельным магазином, чтобы два магазина отвечали на один запрос.",
+      "Which shop this phone is":"Какой магазин на этом телефоне",
+      "Open a shop":"Открыть магазин",
+      "Its first branch":"Первый филиал",
+      "Owner’s email":"Email владельца",
+      "It opens as soon as you finish — no application, its free month starts today.":"Магазин откроется сразу — без заявки, бесплатный месяц начнётся сегодня.",
+      "Open the shop":"Открыть магазин",
+      "← The shop":"← Магазин",
+      "Handed over":"Передано",
+      "count it, then give them the code on Billing":"пересчитайте и назовите код из раздела «Счёт»",
       "Address in Yerevan":"Адрес в Ереване",
       "After delivery":"После доставки",
       "All":"Все",
@@ -7331,6 +7618,18 @@
       ["^(\\d+) handovers?$","Передач: $1"],
       ["^(\\d+) handovers? from (\\d+) shops$","Передач: $1, из $2 магазинов"],
       ["^Start checking · (\\d+)$","Начать проверку · $1"],
+      ["^Commission this period · since (.+)$","Комиссия за период · с $1"],
+      ["^This period · (.+?)( · free month)?$","Этот период · $1$2"],
+      ["^([▸▾] )Books you have already offered \\((\\d+)\\)$","$1Книги, которые вы уже предложили ($2)"],
+      ["^(.+) answered$","$1 ответил(а)"],
+      ["^Your answer · (.+)$","Ваш ответ · $1"],
+      ["^Handed over · (.+)$","Передано · $1"],
+      ["^Send for checking · (.+)$","Отправить на проверку · $1"],
+      ["^Count out (.+) and ask (.+) for the four-digit code on their Billing screen\\. Until you type it, this money is still yours\\.$","Отсчитайте $1 и попросите у $2 четырёхзначный код с экрана «Счёт». Пока вы его не ввели, деньги ещё ваши."],
+      ["^When it is all there, tell (.+) this code$","Когда всё на месте, назовите $1 этот код"],
+      ["^They type it on their phone and (.+) is recorded for both of you\\. Without your code they cannot mark it paid\\.$","Курьер вводит его у себя, и $1 записывается для вас обоих. Без вашего кода он не сможет отметить оплату."],
+      ["^We sent (.+) back to you$","Мы вернули вам $1"],
+      ["^We sent your (.+) back$","Мы вернули ваше предложение «$1»"],
       ["^(.+) counted (.+), not (.+)\\. The office has both numbers; nothing was recorded as paid\\.$","$1 насчитали $2, а не $3. У офиса есть обе суммы; оплата не записана."],
       ["^For (\\d+) orders? \\u00b7 (.+)\\. Count it first\\. Typing the code is you saying you have it\\.$","За $1 {1:заказ|заказа|заказов} · $2. Сначала пересчитайте. Ввод кода — это ваше подтверждение, что деньги у вас."],
       ["^Hand over ([\\d\\u00a0 ]+\\u058f)$","Передать $1"],
@@ -7839,7 +8138,15 @@
 
     if (db.me.role === 'seller'){
       var sl = seller(db.me.sellerId);
+      var shopIds = Object.keys(db.sellers).filter(function(k){ return !db.sellers[k].suspended && (!db.sellers[k].pending || k === db.me.sellerId) });
       return '<h1>Your shop</h1><p class="sub">What buyers see, where your books are, and how the courier settles with you.</p>'+
+        /* the prototype's own switch: which shop this phone is */
+        '<div class="card" style="margin-bottom:18px"><p class="eyebrow">This phone is</p>'+
+          '<select class="in" id="shopSel" aria-label="'+esc(tr('Which shop this phone is'))+'">'+shopIds.map(function(k){
+            return '<option value="'+esc(k)+'"'+(k === db.me.sellerId ? ' selected' : '')+'>'+esc(db.sellers[k].name)+(db.sellers[k].pending ? ' \u00b7 being checked' : '')+'</option>';
+          }).join('')+'</select>'+
+          '<p class="small muted" style="margin:8px 0 10px">Each phone can be a different shop, so two shops can answer the same request.</p>'+
+          '<button class="btn secondary sm" data-act="newshop">'+PLUS+'Register a new shop</button></div>'+
         '<div class="av-edit">'+avatar(sl,'lg')+
           '<div class="grow stack" style="gap:6px">'+
             '<div class="btns"><button class="btn ghost sm" data-act="pickav">'+(sl.avatar?'Change photo':'Add a photo')+'</button>'+
@@ -7878,7 +8185,10 @@
 
         '<h2>Reviews</h2>'+
         '<div class="card"><div class="between"><div class="grow stack">'+
-          '<p style="margin:0;font-weight:600">'+sl.reviews.length+' review'+(sl.reviews.length===1?'':'s')+'</p>'+
+          '<p style="margin:0;font-weight:600">'+sl.reviews.length+' review'+(sl.reviews.length===1?'':'s')+
+            (rating(sl) ? ' · '+rating(sl).toFixed(1)+' ★' : '')+'</p>'+
+          (function(){ var un = sl.reviews.filter(function(v){ return v.text && !v.reply }).length;
+            return un ? '<p class="small muted" style="margin:0">'+un+' waiting for your answer</p>' : '' })()+
 
         '</div><button class="btn secondary sm" data-go="s.reviews">Read them</button></div></div>'+
 
@@ -7994,8 +8304,9 @@
       '<p style="margin:0;font-weight:600;color:var(--foreground)">We sent this back to you.</p>'+
       '<p class="small" style="margin:8px 0 0;color:var(--foreground)">'+words+'</p>'+
       '<div class="btns" style="margin-top:12px">'+
-        '<button class="btn sm"'+(previewId ? ' disabled' : ' data-act="resend:'+rid+'"')+'>Send it to us again</button></div>'+
-      '<p class="small muted" style="margin:8px 0 0">Edit it first if you can — the same words will come back the same way.</p></div>';
+        '<button class="btn sm"'+(previewId ? ' disabled' : ' data-act="editreq:'+rid+'"')+'>Edit it and send again</button>'+
+        '<button class="btn ghost sm"'+(previewId ? ' disabled' : ' data-act="resend:'+rid+'"')+'>Send it as it is</button></div>'+
+      '<p class="small muted" style="margin:8px 0 0">The same words will come back the same way, so edit it if you can.</p></div>';
   }
   function shopBackLine(o, why, previewId){
     var words = previewId ? '<span id="'+previewId+'">'+esc(why || '…')+'</span>' : esc(why || '');
@@ -8051,7 +8362,7 @@
     var TOTAL = 4;
     var head = function(title, sub){
       return (d.g===1
-          ? '<button class="back" data-go="'+(myApp() ? 's.apply' : 'x.auth')+'">← Back</button>'
+          ? '<button class="back" data-go="'+(myApp() ? 's.apply' : d.newShop ? 'x.settings' : 'x.auth')+'">← Back</button>'
           : '<button class="back" data-act="gstep:'+(d.g-1)+'">← Back</button>')+
         '<p class="eyebrow">Step '+d.g+' of '+TOTAL+'</p><h1>'+title+'</h1>'+
         '<p class="sub">'+sub+'</p>'+
@@ -8103,9 +8414,9 @@
     'r.requests':scrReqList, 'r.new':scrNew, 'r.request':scrRequest, 'r.offer':scrOffer, 'r.seller':scrSeller,
     'r.cart':scrCart, 'r.checkout':scrCheckout, 'r.placed':scrPlaced, 'r.orders':scrOrders, 'r.when':scrOrderWhen, 'r.review':scrReview,
     's.feed':scrFeed, 's.missed':scrMissed, 's.request':scrSellerRequest, 's.newoffer':scrNewOffer, 's.offers':scrMyOffers,
-    's.pay':scrPay, 's.orders':scrSellerOrders, 's.order':scrSellerOrder, 's.reviews':scrSellerReviews, 's.stats':scrSellerStats, 's.billing':scrBilling, 's.earn':scrEarn,
+    's.pay':scrPay, 's.orders':scrSellerOrders, 's.order':scrSellerOrder, 's.reviews':scrSellerReviews, 's.billing':scrBilling, 's.earn':scrEarn,
     'c.jobs':scrCourierJobs, 'c.job':scrCourierJob, 'c.done':scrCourierDone,
-    'a.work':scrOpsWork, 'a.shops':scrOpsShops, 'a.shop':scrOpsShop, 'a.apps':scrOpsApps, 'a.app':scrOpsApp, 's.apply':scrApply,
+    'a.work':scrOpsWork, 'a.shops':scrOpsShops, 'a.newshop':scrOpsNewShop, 'a.shop':scrOpsShop, 'a.apps':scrOpsApps, 'a.app':scrOpsApp, 's.apply':scrApply,
     'a.reqs':scrOpsReqs, 'a.req':scrOpsReq, 'a.offer':scrOpsOffer,
     'a.orders':scrOpsOrders, 'a.order':scrOpsOrder, 'a.claim':scrOpsClaim, 'a.cash':scrOpsCash,
     'x.notifs':scrNotifs, 'x.settings':scrSettings, 's.location':scrLocation, 'x.auth':scrAuth, 's.reg':scrReg
@@ -8122,7 +8433,8 @@
     var rv = document.getElementById('rv_text'); if (rv) view.draft.rvtext = rv.value;
     ['p_name','p_phone','p_addr','p_shop','p_bio','p_cphone','l_label','l_addr','l_hours',
      'g_shop','g_bio','g_label','g_addr','g_hours','a_email','a_pass','p_ref',
-     'cash_code','cash_got','op_why','op_amt'].forEach(function(id){
+     'cash_got','op_why','op_amt','rp_text','c_code',
+     'ns_name','ns_email','ns_bio','ns_label','ns_addr','ns_hours'].forEach(function(id){
       var el = document.getElementById(id);
       if (el) view.draft[id] = el.value;
     });
@@ -8245,7 +8557,7 @@
         var rB = req(a); if (!rB) break;
         var whyRB = (view.draft.op_why || '').trim();
         if (!whyRB){ toast('Say what to fix \u2014 the reader reads these words'); break; }
-        rB.review = 'sent back'; rB.reviewWhy = whyRB;
+        rB.review = 'sent back'; rB.reviewWhy = whyRB; rB.backAt = Date.now();
         logOps('request', rB.id, 'waiting', 'sent back', whyRB);
         nextAtGate('request', 'Back to the reader, with your sentence'); break;
       }
@@ -8260,11 +8572,19 @@
         var oB = offer(a); if (!oB) break;
         var whyOB = (view.draft.op_why || '').trim();
         if (!whyOB){ toast('Say what to fix \u2014 the shop reads these words'); break; }
-        oB.review = 'sent back'; oB.reviewWhy = whyOB;
+        oB.review = 'sent back'; oB.reviewWhy = whyOB; oB.backAt = Date.now();
         logOps('offer', oB.id, 'waiting', 'sent back', whyOB);
         nextAtGate('offer', 'Back to the shop, with your sentence'); break;
       }
       /* the reader's way back in after a request was sent back */
+      case 'editreq': {
+        var rE = req(a); if (!rE) break;
+        view.screen = 'r.new'; view.p = {};
+        view.draft = { rstep: 2, kind: rE.kind, title: rE.title || '', author: rE.author || '',
+          text: rE.kind === 'concrete' ? (rE.text === rE.title ? '' : rE.text) : rE.text,
+          budget: rE.budget || '', cond: rE.cond || 'any', photos: (rE.photos || []).slice(), editing: rE.id };
+        window.scrollTo(0, 0); render(); break;
+      }
       case 'resend': {
         var rR = req(a); if (!rR) break;
         rR.review = 'waiting'; rR.reviewWhy = null; rR.posted = Date.now();
@@ -8284,8 +8604,8 @@
             so.name = ap.name; so.bio = ap.bio || ''; so.payMode = ap.payMode || 'after';
             if (ap.avatar) so.avatar = ap.avatar;
             so.locations = ap.locations.slice(); so.reviews = []; so.joined = Date.now();
-            so.since = String(new Date().getFullYear()); so.suspended = false;
-            if (ap.owner === db.me.sellerId){ db.account.state = 'trial'; db.account.trialStart = Date.now(); }
+            so.since = String(new Date().getFullYear()); so.suspended = false; so.pending = false;
+            var ac = acct(ap.owner); ac.state = 'trial'; ac.trialStart = Date.now(); ac.billingDay = new Date().getDate();
           } else {
             db.sellers[ap.id] = { id:ap.id, name:ap.name, since:String(new Date().getFullYear()),
               orders:0, avatar:ap.avatar||null, bio:ap.bio||'', locations:ap.locations.slice(), joined: Date.now(),
@@ -8372,24 +8692,48 @@
         logOps('order', fD.no, 'flagged', b === 'drop' ? 'upheld \u2014 commission waived' : 'dismissed \u2014 it counts', whyD);
         toast('Settled \u2014 both sides told'); render(); break;
       }
+      case 'nsstep': {
+        readDraft(); var dN = view.draft;
+        if (+a === 2){
+          if (!String(dN.ns_name||'').trim()){ dN.err = 'The shop needs a name \u2014 it is on every offer it sends.'; render(); return; }
+          if (!/.+@.+\..+/.test(String(dN.ns_email||'').trim())){ dN.err = 'An email the owner reads \u2014 it is how they sign in.'; render(); return; }
+        }
+        dN.err = null; dN.ns = +a; window.scrollTo(0, 0); render(); break;
+      }
+      case 'nspickup': { readDraft(); view.draft.ns_pickup = view.draft.ns_pickup === false; render(); break; }
+      case 'opsnewshop': {
+        readDraft(); var dS = view.draft;
+        if (!String(dS.ns_addr||'').trim()){ dS.err = 'A street address \u2014 the courier and the readers go there.'; render(); return; }
+        var sid = 'shop-' + Date.now().toString(36) + ((SYNC && SYNC.mode === 'shared') ? '-' + SYNC.device : '');
+        db.sellers[sid] = { id: sid, name: dS.ns_name.trim(), email: dS.ns_email.trim(), bio: String(dS.ns_bio||'').trim(),
+          since: String(new Date().getFullYear()), orders: 0, avatar: null, reviews: [], missed: [], payMode: 'after',
+          joined: Date.now(), trialStart: Date.now(),
+          locations: [{ id: 'loc1', label: String(dS.ns_label||'').trim() || 'Shop', addr: dS.ns_addr.trim() + ', Yerevan',
+                        hours: String(dS.ns_hours||'').trim() || 'hours not given', pickup: dS.ns_pickup !== false }] };
+        acct(sid);
+        logOps('shop', sid, 'none', 'open', 'Opened by the office');
+        toast('Open \u2014 requests start reaching '+db.sellers[sid].name+' now');
+        go('a.shop', { id: sid }); break;
+      }
       case 'opsclaimok': case 'opsclaimno': {
         readDraft();
         var whyC = (view.draft.op_why || '').trim();
         if (!whyC){ toast('Say what you found, or did not'); break; }
+        var cId = view.p.id || claimShops()[0], cA = acct(cId);
         if (name === 'opsclaimok'){
-          db.account.claim = null; db.account.reject = null;
-          db.account.state = 'good'; db.account.claimStrikes = 0;
-          logOps('claim', 'claim', 'claimed', 'found \u2014 account cleared', whyC);
+          cA.claim = null; cA.reject = null;
+          cA.state = 'good'; cA.claimStrikes = 0; cA.paidAt = Date.now();
+          logOps('claim', cId, 'claimed', 'found \u2014 account cleared', whyC);
           toast('Cleared');
         } else {
-          db.account.claim = null;
-          db.account.reject = { at: Date.now(), why: whyC };
-          db.account.claimStrikes = (db.account.claimStrikes||0) + 1;
-          if (db.account.state === 'due') db.account.state = 'restricted';
-          logOps('claim', 'claim', 'claimed', 'not found', whyC);
+          cA.claim = null;
+          cA.reject = { at: Date.now(), why: whyC };
+          cA.claimStrikes = (cA.claimStrikes||0) + 1;
+          if (cA.state === 'due') cA.state = 'restricted';
+          logOps('claim', cId, 'claimed', 'not found', whyC);
           toast('Rejected \u2014 the shop has been told');
         }
-        go('a.shop', { id: db.me.sellerId }); break;
+        go('a.shop', { id: cId }); break;
       }
       case 'opscash': {
         readDraft();
@@ -8411,7 +8755,7 @@
         logOps('cash', stX.id, money(stX.amount)+' vs '+money(stX.got), money(amt)+' stands', whyX);
         toast('Recorded, with your name on it'); go('a.shop', { id: stX.seller }); break;
       }
-      case 'ackfree': { db.account.trialAck = standing().daysLeft; render(); break; }
+      case 'ackfree': { acct().trialAck = standing().daysLeft; render(); break; }
       /* the two verdicts. Both go out the same way the finger would have sent
          them, so the buttons teach the swipe rather than replacing it. */
       case 'swipe': {
@@ -8460,6 +8804,17 @@
       }
       /* the billing drill-down: month, then day, then the orders of that day.
          An empty value is the way back up, so one action serves both. */
+      case 'revopen': { view.p.rv = a; render(); break; }
+      case 'revcancel': { view.p.rv = null; render(); break; }
+      case 'revpost': {
+        readDraft();
+        var slR = seller(db.me.sellerId), rv = slR.reviews[+a], txt = String(view.draft.rp_text || '').trim();
+        if (!rv) { view.p.rv = null; render(); break; }
+        if (!txt) { toast('Write the answer first'); break; }
+        rv.reply = { text: txt, at: Date.now() };
+        view.p.rv = null; view.draft.rp_text = '';
+        toast('Posted \u2014 readers see it under the review'); render(); break;
+      }
       case 'earn': { go('s.earn', { mon: a, day: b || null }); break; }
       case 'bmon': { view.p = a ? { tab:view.p.tab, mon:a } : { tab:view.p.tab }; window.scrollTo(0,0); render(); break; }
       case 'bday': { view.p = { tab:view.p.tab, mon:view.p.mon, day:a || null }; window.scrollTo(0,0); render(); break; }
@@ -8480,6 +8835,14 @@
         var text = (d.text||'').trim(), title = (d.title||'').trim();
         if (d.kind==='open' && text.length<10) { d.err='Tell them a little more — ten characters at least.'; render(); return; }
         if (d.kind==='concrete' && !title) { d.err='A title, at least. Everything else is optional.'; render(); return; }
+        if (d.editing && req(d.editing)){
+          /* a request we sent back, edited: the same request goes to us again */
+          var rU = req(d.editing);
+          rU.kind = d.kind; rU.text = text || title; rU.title = title || null; rU.author = d.author || null;
+          rU.budget = parseInt(d.budget,10) || null; rU.cond = d.cond || 'any'; rU.photos = (d.photos||[]).slice();
+          rU.review = 'waiting'; rU.reviewWhy = null; rU.posted = Date.now(); rU.rounds = (rU.rounds || 0) + 1;
+          toast('With us again \u2014 we read it before the shops do'); go('r.request', { id: rU.id }); break;
+        }
         var id = freshId('r', db.requests, 'r');
         db.requests.push({ id:id, reader:db.me.readerId, kind:d.kind, text: text || title, title:title||null, author:d.author||null,
           budget: parseInt(d.budget,10)||null, city:'Yerevan', cond:d.cond||'any', posted: Date.now(), status:'open',
@@ -8646,7 +9009,7 @@
       case 'toggle': view.open = (view.open === a ? null : a); render(); break;
       case 'nop': break;
       case 'signout': go('x.auth'); break;
-      case 'startreg': { view.screen='s.reg'; view.p={}; view.draft={g:1}; window.scrollTo(0,0); render(); break; }
+      case 'startreg': case 'newshop': { view.screen='s.reg'; view.p={}; view.draft={g:1, newShop:true, pay:'after'}; window.scrollTo(0,0); render(); break; }
       case 'gstep': {
         readDraft(); var gto = parseInt(a,10);
         if (gto === 2 && !(d.g_shop||'').trim()){ d.err='Your shop needs a name \u2014 it is on every offer you send.'; render(); return; }
@@ -8671,6 +9034,17 @@
           locations: [{ id:'loc1', label:(d.label||d.g_label||'Main').trim(),
             addr:(d.addr||d.g_addr||'').trim()+', Yerevan',
             hours:(d.hours||d.g_hours||'').trim() || 'hours not given', pickup: d.pickup !== false }] };
+        if (!ap3 && d.newShop){
+          /* a new shop: its own record, held back from readers until a person
+             has looked at it, and this phone becomes that shop */
+          var nid = 'shop-' + Date.now().toString(36) + ((SYNC && SYNC.mode === 'shared') ? '-' + SYNC.device : '');
+          db.sellers[nid] = { id: nid, name: data3.name || 'New shop', email: 'the Google account you signed in with',
+            since: String(new Date().getFullYear()), orders: 0, avatar: data3.avatar, bio: data3.bio,
+            locations: data3.locations.slice(), payMode: data3.payMode, reviews: [], missed: [],
+            joined: Date.now(), trialStart: Date.now(), pending: true };
+          setMyShop(nid);
+          sl3 = db.sellers[nid];
+        }
         if (ap3){
           var was3 = ap3.state;
           Object.keys(data3).forEach(function(k){ ap3[k] = data3[k] });
@@ -8780,16 +9154,23 @@
       case 'theme': { db.theme = a; applyTheme();
         toast(a==='system' ? 'Following your phone' : a==='light' ? 'Light' : 'Dark'); render(); break; }
       case 'flagline': toast('Flagged \u2014 held out of the total until an operator checks it'); break;
-      case 'setstate': { db.account.state = a; toast('Now showing: '+(a==='good'?'nothing due':a)); render(); break; }
+      case 'setstate': { acct().state = a; toast('Now showing: '+(a==='good'?'nothing due':a)); render(); break; }
+      case 'copy': {
+        var txC = decodeURIComponent(a || '');
+        try { navigator.clipboard.writeText(txC).then(function(){ toast('Copied') }, function(){ toast(txC) }); } catch(e){ toast(txC) }
+        break;
+      }
+      case 'pickrcpt': { readDraft(); var ri = document.getElementById('rcptIn'); if (ri) ri.click(); break; }
       case 'paymethod': { readDraft(); view.draft.p_method = a; render(); break; }
       case 'sendclaim': {
         readDraft();
         var ref0 = (view.draft.p_ref||'').trim();
-        if (!ref0){ view.draft.err = 'A reference, or who took the cash \u2014 without it we are looking for an unnamed payment.'; render(); return; }
-        db.account.claim = { at: Date.now(), amount: commissionDue(),
-                             method: view.draft.p_method || 'transfer', ref: ref0 };
-        db.account.reject = null;
-        view.draft.p_ref = ''; view.draft.err = null;
+        if (!view.draft.rcpt){ view.draft.err = 'Add a photo of the receipt \u2014 it is how we find the payment.'; render(); return; }
+        var aC = acct();
+        aC.claim = { at: Date.now(), amount: commissionDue(),
+                     method: view.draft.p_method || 'transfer', ref: ref0, photo: view.draft.rcpt };
+        aC.reject = null;
+        view.draft.p_ref = ''; view.draft.err = null; view.draft.rcpt = null;
         toast('Sent \u2014 an operator checks it against the bank');
         go('s.billing'); break;
       }
@@ -8801,8 +9182,8 @@
         }
         render(); break;
       }
-      case 'unclaim': { db.account.claim = null; toast('Taken back'); render(); break; }
-      case 'dropreject': { db.account.reject = null; render(); break; }
+      case 'unclaim': { acct().claim = null; toast('Taken back'); render(); break; }
+      case 'dropreject': { acct().reject = null; render(); break; }
       /* the office's side of the same table, reachable from the seller's
          screen only because a prototype has no ops app to switch to */
       /* `opsapprove` and `opsreject` stood here: the office's side of a payment
@@ -8888,7 +9269,7 @@
       }
       /* ---- the handover, both sides ---------------------------------------
          Four actions and one rule between them: the ledger is written in
-         `cashok`, and nowhere else. Starting a handover records an intention;
+         `csettledone` (the courier typing the shop's code), and nowhere else. Starting a handover records an intention;
          cancelling it records that nothing happened; a disagreement records
          two numbers and no money. Only the code moves anything. */
       case 'csettlestart': {
@@ -8899,7 +9280,8 @@
                           courier: db.me.courierId, seller: a,
                           subs: br.unpaid.map(function(x){ return x.sb.no }),
                           amount: br.owed, code: fourDigits(), at: Date.now(), state: 'open' });
-        toast('Read the code out \u2014 nothing is recorded until they type it');
+        view.cashErr = null;
+        toast('Ask the shop for its code \u2014 nothing is recorded until you type it');
         render(); break;
       }
       case 'csettlestop': {
@@ -8907,17 +9289,18 @@
         if (stC && stC.state === 'open'){ stC.state = 'cancelled'; stC.doneAt = Date.now(); }
         toast('Cancelled \u2014 the cash is still yours'); render(); break;
       }
-      case 'cashok': {
+      case 'csettledone': {
         readDraft();
         var stO = db.settles.filter(function(x){ return x.id === a })[0];
         if (!stO || stO.state !== 'open'){ render(); break; }
-        var typed = String(view.draft.cash_code || '').trim();
+        var typed = String(view.draft.c_code || '').trim();
         if (typed !== stO.code){
           view.cashErr = typed
-            ? 'That is not the code on the courier\u2019s phone. Ask them to read it again.'
-            : 'Type the four digits the courier is showing you.';
+            ? 'That is not the code on the shop\u2019s screen. Ask them to read it again.'
+            : 'Type the four digits the shop gives you.';
           render(); break;
         }
+        view.draft.c_code = '';
         view.cashErr = null;
         stO.state = 'done'; stO.doneAt = Date.now(); stO.got = stO.amount;
         /* now, and only now, the money moves in the record — one entry per
@@ -9605,6 +9988,21 @@
   };
   /* ==== end of shared test world ============================================ */
 
+  /* An empty field showing an example must not look filled in. Every
+     placeholder that IS an example says so ("e.g. …") and is set in italics;
+     the few that are instructions or the expected amount (a search box,
+     "street, building, apartment", a four-digit code) carry data-ph-plain. */
+  var EG = { en: 'e.g. ', ru: '\u043d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: ', hy: '\u0585\u0580\u056b\u0576\u0561\u056f\u055d ' };
+  function markExamples(){
+    var pre = EG[db.lang] || EG.en;
+    [].forEach.call(document.querySelectorAll('#app [placeholder], #dock [placeholder]'), function(el){
+      if (el.hasAttribute('data-ph-plain') || el.type === 'search') return;
+      var ph = el.getAttribute('placeholder') || '';
+      if (!ph || ph.indexOf(pre) === 0) return;
+      el.setAttribute('placeholder', pre + ph);
+      el.classList.add('eg');
+    });
+  }
   var DOCK_MQ = window.matchMedia ? window.matchMedia('(max-width:560px)') : null;
   function renderDock(){
     var dock = document.getElementById('dock'), app = document.getElementById('app');
@@ -9626,11 +10024,23 @@
     document.body.classList.toggle('has-dock', on);
     if (on) document.body.style.setProperty('--dock-h', dock.offsetHeight + 'px');
   }
+  /* how much of the bottom of the screen the on-screen keyboard covers */
+  (function(){
+    var vv = window.visualViewport; if (!vv) return;
+    var fit = function(){
+      var kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      var open = kb > 80;
+      document.body.classList.toggle('kb-open', open);
+      document.documentElement.style.setProperty('--kb', (open ? kb : 0) + 'px');
+    };
+    vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit);
+  })();
   if (DOCK_MQ){
     var redock = function(){ render(); };
     if (DOCK_MQ.addEventListener) DOCK_MQ.addEventListener('change', redock); else if (DOCK_MQ.addListener) DOCK_MQ.addListener(redock);
   }
   function render(moved){
+    ensureMyShop();
     if (db.me.role === 'seller' && myApp() && ['s.reg','x.auth','x.settings','x.notifs'].indexOf(view.screen) < 0)
       view.screen = 's.apply';
     renderBar();
@@ -9644,6 +10054,7 @@
     app.innerHTML = html;
     app.classList.toggle('bottom-act', !!app.querySelector('.page-tail'));
     i18n();
+    markExamples();
     renderDock();
     wireDeck();
     if (moved){
@@ -9735,6 +10146,11 @@
       });
       return;
     }
+    if (e.target.id === 'rcptIn'){
+      var rf = (e.target.files || [])[0];
+      if (rf) shrinkPhoto(rf, function(u){ view.draft.rcpt = u; view.draft.err = null; render(); });
+      return;
+    }
     if (e.target.id === 'avIn'){
       var af = (e.target.files || [])[0];
       if (af) shrinkPhoto(af, function(u){
@@ -9750,6 +10166,11 @@
       view.p[flt] = e.target.value;
       ['n', 'nr', 'no', 'allsh'].forEach(function(k){ delete view.p[k] });
       render(); return;
+    }
+    if (e.target.id === 'shopSel'){
+      setMyShop(e.target.value);
+      toast('This phone is ' + seller(e.target.value).name);
+      go('s.feed'); return;
     }
     if (e.target.id === 'roleSel'){
       db.me.role = e.target.value;
