@@ -382,6 +382,35 @@
      same place it would have been anyway. Only screens that actually contain
      a tail become flex containers, so nothing else's spacing moves. */
   main.bottom-act{display:flex;flex-direction:column;min-height:calc(100dvh - 56px)}
+  /* THE DOCK. On a phone the screen's one big action - Ask for a book, Keep
+     this and check the order, Send the offer - is fixed to the bottom of the
+     screen, above the tab bar when there is one. It does not ride up on a
+     short screen or scroll away on a long one: the thumb finds it in the same
+     place every time. renderDock() moves the button here after each render;
+     only a screen with exactly one solid wide button has one, so a list of
+     per-row actions, a ghost "Send it back" or a destructive "Close this
+     request" stays where it is. Above 560px the button stays in the page. */
+  .dock{display:none}
+  @media (max-width:560px){
+    .dock.on{display:block;position:fixed;left:0;right:0;z-index:35;
+      bottom:0;padding:12px 16px max(12px, env(safe-area-inset-bottom,0px));
+      background:var(--background);border-top:1px solid var(--border)}
+    /* with a tab bar the dock still reaches the bottom edge, so nothing
+       scrolls through the gap between the button and the bar; the bar
+       (z-index 40) floats over the dock's lower padding */
+    body.has-tabbar .dock.on{padding:10px 16px calc(max(12px, env(safe-area-inset-bottom,0px)) + 74px)}
+    .dock .btn{display:flex;width:100%;max-width:536px;margin:0 auto}
+    .dock .btns{display:flex;gap:8px;max-width:536px;margin:0 auto;flex-wrap:nowrap}
+    .dock .btns .btn{flex:1 1 0;min-width:0;margin:0}
+    .dock .btn + .btn{margin-top:8px}
+    body.has-dock main{padding-bottom:calc(var(--dock-h, 64px) + 24px)}
+    body.has-dock.has-tabbar main{padding-bottom:calc(var(--dock-h, 140px) + 24px)}
+    body.has-dock .toast{bottom:calc(var(--dock-h, 64px) + 16px)}
+    body.has-dock.has-tabbar .toast{bottom:calc(var(--dock-h, 140px) + 16px)}
+    /* the old sticky helpers stand down when the dock has the button */
+    body.has-dock main.bottom-act{min-height:0}
+    body.has-dock .pin-bottom:empty, body.has-dock .page-tail:empty{display:none}
+  }
   main.bottom-act > .page-tail{margin-top:auto}
   /* this used to carry its spacing inline, where it quietly beat the auto
      margin above and pinned the way out halfway up the screen */
@@ -538,6 +567,7 @@
   .stack-list{display:flex;flex-direction:column;gap:12px}
   .card-row{border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background);padding:16px;display:flex;gap:14px;text-align:left;width:100%;align-items:flex-start}
   button.card-row:hover{background:var(--muted)}
+  .row.tap{cursor:pointer}
   /* BORDER MEANS BUTTON, measured: a card you press wears --edge like every
      other control (3:1 or better against the page, WCAG 1.4.11). Cards that
      only hold information keep the quiet --border. These three were pressable
@@ -859,6 +889,7 @@
 <div class="bar"><div class="bar-in" id="bar"></div></div>
 <aside class="side" id="side" aria-label="Admin sections"></aside>
 <main id="app"></main>
+<div class="dock" id="dock"></div>
 <div class="tabbar" id="tabbar" role="navigation" aria-label="Sections"></div>
 <dialog id="sheet" aria-modal="true"></dialog>
 <div class="proto" id="proto"></div>
@@ -901,7 +932,7 @@
         locations:[ { id:'main', label:'Shop', addr:'Mashtots 118, Yerevan',
                       hours:'Mon\u2013Sat 10\u201319', pickup:true } ] }
     ],
-    couriers: { vahe:{ id:'vahe', name:'Vahe', phone:'+374 77 ** ** **', onShift:true } },
+    couriers: { vahe:{ id:'vahe', name:'Vahe', phone:'+374 77 18 42 06', onShift:true } },
     /* `alerts` lived here: a shop typed three or four subjects and we
        notified it when a request mentioned one. It is out of the first
        release. In one city, with the volume a new marketplace has, a shop
@@ -912,8 +943,16 @@
        shop about until there are too many to read; when that day comes,
        what sorts them will be what the shop has actually sold, not what it
        once typed into a settings screen. */
-    ledger: [ { at: now - 11*DAY, amount: 5200, from:'courier', to:'shop',
-                sub:'1038-A', note:'handed over, both confirmed', pending:false } ],
+    /* The courier's two past deliveries, as money: each buyer paid Vahe at
+       the door, and Vahe has handed Aram the first one. Without the buyer
+       lines his History said "out of your own pocket"; the second one is
+       still his to hand over, so the counter handover can be tried. */
+    ledger: [ { at: now - 12*DAY, amount: 6200, from:'buyer', to:'courier',
+                sub:'#1038', note:'cash on delivery', pending:false },
+              { at: now - 11*DAY, amount: 5200, from:'courier', to:'shop',
+                sub:'1038-A', note:'handed over, both confirmed', pending:false },
+              { at: now - 2*DAY, amount: 5300, from:'buyer', to:'courier',
+                sub:'#1040', note:'cash on delivery', pending:false } ],
     /* Every courier-to-shop handover ever started. An entry is the EVENT, not
        a flag on an order: one handover usually covers several orders, and the
        thing both sides are confirming is the moment and the amount, not each
@@ -928,7 +967,7 @@
     account: { state:'trial', trialStart: now - 16*DAY, trialAck: null, billingDay: 15, lastPeriod:'15 Oct \u2013 14 Nov' },
     notifSeen: 0,
     readers: {
-      dina:{ id:'dina', name:'Dina', city:'Yerevan', phone:'+374 91 ** ** **', address:'Komitas 24, apt 7' },
+      dina:{ id:'dina', name:'Dina', city:'Yerevan', phone:'+374 91 22 33 44', address:'Komitas 24, apt 7' },
       sergey:{ id:'sergey', name:'Sergey', city:'Yerevan' },
       anna:{ id:'anna', name:'Anna', city:'Yerevan' },
       lusine:{ id:'lusine', name:'Lusine', city:'Yerevan' }
@@ -1009,28 +1048,38 @@
        purpose: delivered and paid for are two different facts, and a seed
        where they always agree teaches the wrong lesson. */
     orders: [
-      { id:1038, reader:'sergey', name:'Sergey', phone:'+374 ** ** ** **', addr:'Saryan 12',
+      { id:1038, reader:'sergey', name:'Sergey', phone:'+374 93 44 55 66', addr:'Saryan 12',
         closed:[], released:0, delivery:'courier', fee:1000, books:5200, total:6200,
         when:{ kind:'slot', at: now - 12*DAY }, subs:[
         { no:'1038-A', seller:'aram', loc:'mash', items:['h1'], delivery:'courier',
-          fee:1000, books:5200, total:6200, status:'completed', by:'courier',
+          fee:1000, books:5200, total:6200, status:'completed', by:'courier', courier:'vahe',
           doneAt: now - 12*DAY, reviewed:true, shopConfirmedCash:true } ] },
-      { id:1039, reader:'anna', name:'Anna', phone:'+374 ** ** ** **',
+      { id:1039, reader:'anna', name:'Anna', phone:'+374 94 12 34 56',
         closed:[], released:0, delivery:'pickup', fee:0, books:7400, total:7400, subs:[
         { no:'1039-A', seller:'nairi', loc:'tum12', items:['h2'], delivery:'pickup',
           fee:0, books:7400, total:7400, status:'completed', by:'code', code:'8812',
           doneAt: now - 9*DAY, reviewed:true } ] },
-      { id:1040, reader:'lusine', name:'Lusine', phone:'+374 ** ** ** **', addr:'Komitas 3',
+      { id:1040, reader:'lusine', name:'Lusine', phone:'+374 95 65 43 21', addr:'Komitas 3',
         closed:[], released:0, delivery:'courier', fee:1000, books:4300, total:5300,
         when:{ kind:'slot', at: now - 2*DAY }, subs:[
         { no:'1040-A', seller:'aram', loc:'tum', items:['h3'], delivery:'courier',
-          fee:1000, books:4300, total:5300, status:'completed', by:'courier',
+          fee:1000, books:4300, total:5300, status:'completed', by:'courier', courier:'vahe',
           doneAt: now - 2*DAY, reviewed:false } ] }
     ],
     seq: { o: 5, r: 7, ord: 1042 }
   };
 
   var hues = { o1:0, o2:1, o3:2, o4:3 };
+  /* Sample people carry whole sample numbers. They used to be written as
+     '+374 91 ** ** **', which put asterisks into the reader's own edit
+     form - the one place a person must see their number in full. Who may
+     see a buyer's phone is a rule for the real app's server (see the
+     project instructions, privacy), not something to fake in the data. */
+  function samplePhone(n){
+    n = Math.abs(parseInt(n, 10) || 0);
+    var two = function(k){ return String(10 + (n * k) % 89) };
+    return '+374 9' + (1 + n % 8) + ' ' + two(7) + ' ' + two(13) + ' ' + two(29);
+  }
 
 
   /* ---- history -------------------------------------------------------------
@@ -1089,7 +1138,7 @@
               status: 'done_sold', sent: posted + 3 * HOUR + Math.round(R() * 20 * HOUR), review: 'passed' };
     var no = String(400 + i);
     db.requests.push(q); db.offers.push(o);
-    db.orders.push({ id: 400 + i, reader: rid, name: who, phone: '+374 ** ** ** **', closed: [q.id], released: 0,
+    db.orders.push({ id: 400 + i, reader: rid, name: who, phone: samplePhone(i), closed: [q.id], released: 0,
       delivery: 'pickup', fee: 0, books: price, total: price, subs: [
       { no: no + '-A', seller: shopId, loc: l.id, items: [o.id], delivery: 'pickup', fee: 0, books: price, total: price,
         status: 'completed', by: 'code', code: String(1000 + Math.floor(R() * 9000)), reviewed: true,
@@ -1684,6 +1733,8 @@
     if (id==='r.cart') n = db.cart.length;
     if (id==='s.orders') n = pendingSubs().filter(function(x){ return ['placed','confirmed'].indexOf(x.sb.status) >= 0 }).length;
     if (id==='c.jobs') n = courierJobs().length;
+    /* a courier at the counter is waiting on this shop's code: say so on the tab */
+    if (id==='s.billing') n = db.settles.filter(function(x){ return x.state === 'open' && x.seller === db.me.sellerId }).length;
     if (id==='a.apps') n = db.shopApps.filter(function(a){ return a.state === 'waiting' }).length;
     if (id==='a.reqs') n = waitingReqs().length + waitingOffers().length;
     if (id==='a.orders') n = allSubs().filter(function(x){ return x.sb.disputed && !x.sb.resolved }).length;
@@ -2120,8 +2171,10 @@
          already printed on the Buy button. One price per offer: it lives on
          the button you press, which is also where it matters. */
       : '<button class="btn ghost sm" data-act="add:'+o.id+'">Add to cart</button>'+
-        '<button class="btn link" data-go="r.offer" data-p="'+o.id+'">See it and buy</button>';
-    return '<div class="row'+(gone||dec?' past':'')+'">'+
+        '<button class="btn ghost sm" data-act="buy:'+o.id+'">Buy</button>';
+    /* the whole card opens the offer; the buttons on it still do their own
+       thing, because a button's action is found before the card's */
+    return '<div class="row tap'+(gone||dec?' past':'')+'" data-go="r.offer" data-p="'+o.id+'">'+
       '<button class="cover-btn" data-go="r.offer" data-p="'+o.id+'" aria-label="Open '+esc(o.title)+'">'+cover(o,'m')+'</button>'+
       '<div class="grow stack">'+
         '<div class="between" style="align-items:flex-start"><button class="opens grow" data-go="r.offer" data-p="'+o.id+'"><p class="book-t">'+esc(o.title)+'</p></button>'+
@@ -2162,10 +2215,10 @@
           (over ? '<p style="margin:0"><span class="chip dim">over your limit of '+money(rq.budget)+'</span></p>' : '')+
           (o.status==='removed'
             ? '<div class="note bad">The seller has removed this offer — the copy is gone.</div>'
-            : cartHas(o.id) ? '<div class="btns"><button class="btn" data-act="buy:'+o.id+'">Buy · '+money(o.price)+'</button>'+
+            : cartHas(o.id) ? '<div class="btns" data-dock><button class="btn" data-act="buy:'+o.id+'">Buy · '+money(o.price)+'</button>'+
               '<button class="btn ghost" data-act="rm:'+o.id+'" aria-pressed="true">\u2713 In cart</button></div>'+
               '<p class="hint" style="margin-top:8px">It is waiting in your cart. Press it again to take it out.</p>'
-            : '<div class="btns"><button class="btn" data-act="buy:'+o.id+'">Buy · '+money(o.price)+'</button>'+
+            : '<div class="btns" data-dock><button class="btn" data-act="buy:'+o.id+'">Buy · '+money(o.price)+'</button>'+
               '<button class="btn secondary" data-act="add:'+o.id+'" aria-pressed="false">Add to cart</button></div>'+
               '<p class="small muted" style="margin:2px 0 0">Add to cart to take it with books from your other requests.</p>')+
         '</div>'+
@@ -4835,6 +4888,13 @@
           (function(){
             if (r.owed <= 0) return '';
             var open = settleOpen(r.id);
+            /* the shop's answer comes back here: a count that differed is
+               said on the courier's side too, not only in the office */
+            var last = db.settles.filter(function(x){ return x.seller === r.id && x.courier === db.me.courierId && x.state !== 'open' })
+              .sort(function(a, b){ return (b.doneAt || b.at) - (a.doneAt || a.at) })[0];
+            var odd = (!open && last && last.state === 'mismatch')
+              ? '<p class="small" style="margin:8px 0 0;color:var(--foreground)">'+esc(r.name)+' counted '+money(last.got)+', not '+money(last.amount)+'. The office has both numbers; nothing was recorded as paid.</p>'
+              : '';
             /* One handover for the whole shop, not one per order. The courier
                counts out a single pile of notes and the shop takes a single
                pile; three buttons for three orders describes a thing that is
@@ -4849,7 +4909,7 @@
                 '<div class="btns" style="width:100%">'+
                   '<button class="btn ghost sm" data-act="csettlestop:'+open.id+'">Not now \u2014 cancel</button></div>'+
               '</div>';
-            return '<div class="btns" style="margin-top:8px">'+
+            return odd + '<div class="btns" style="margin-top:8px">'+
               '<button class="btn sm" data-act="csettlestart:'+r.id+'">Hand over '+money(r.owed)+'</button></div>'+
               '<p class="small muted" style="margin:6px 0 0">'+r.unpaid.length+
                 ' order'+(r.unpaid.length>1?'s':'')+' in one go. They confirm with a code at the counter.</p>';
@@ -6138,7 +6198,7 @@
         price: price, note: '', status: 'done_sold', sent: at - DAY, review: 'passed' };
       db.offers.push(oo);
       var stt = ['placed', 'shipped', 'shipped', 'placed'][Math.floor(R() * 4)];
-      db.orders.push({ id: 3000 + j, reader: rid2, name: w2, phone: '+374 ** ** ** **', closed: [], released: 0, delivery: 'pickup', fee: 0,
+      db.orders.push({ id: 3000 + j, reader: rid2, name: w2, phone: samplePhone(j + 50), closed: [], released: 0, delivery: 'pickup', fee: 0,
         books: price, total: price, subs: [{ no: (3000 + j) + '-A', seller: k2, loc: oo.loc, items: [oo.id], delivery: 'pickup', fee: 0,
           books: price, total: price, status: stt, code: String(1000 + Math.floor(R() * 9000)), placedAt: at,
           readyAt: stt !== 'placed' ? at + Math.floor(R() * 20 * HOUR) : null }] });
@@ -6169,7 +6229,7 @@
   var NOTES = ['Clean copy, spine slightly faded.', 'Pencil notes on a few pages, otherwise tidy.', '',
                'Soviet print, cloth binding, a little sun on the cover.', 'Read once, like new.', ''];
   function busyOrder(id, reader, delivery, subsSpec, when){
-    var rd = db.readers[reader], order = { id: id, reader: reader, name: rd.name, phone: rd.phone || '+374 ** ** ** **',
+    var rd = db.readers[reader], order = { id: id, reader: reader, name: rd.name, phone: rd.phone || samplePhone(id),
       addr: rd.address || 'Tumanyan 12, apt 3', closed: [], released: 0, delivery: delivery,
       fee: delivery === 'courier' ? db.deliveryFee : 0, subs: [], when: { kind: 'slot', at: when || firstSlot() } };
     subsSpec.forEach(function(sp, i){
@@ -6313,6 +6373,11 @@
         if (apN.state === 'open') out.push({ ts: apN.decidedAt, text:'<b>Your shop is open</b>', sub:'requests reach you from now on', go:'s.feed' });
         if (apN.state === 'sent back') out.push({ ts: apN.decidedAt, text:'<b>One thing to fix</b> before your shop opens', sub: esc(apN.why || ''), go:'s.apply' });
         if (apN.state === 'rejected') out.push({ ts: apN.decidedAt, text:'<b>We cannot open this shop</b>', sub: esc(apN.why || ''), go:'s.apply' });
+      });
+      db.settles.forEach(function(stN){
+        if (stN.seller !== db.me.sellerId || stN.state !== 'open' || !db.couriers[stN.courier]) return;
+        out.push({ ts: stN.at || now, text: esc(db.couriers[stN.courier].name)+' is handing you '+money(stN.amount),
+                   sub: 'type the code they read out, on Billing', go: 's.billing' });
       });
       var st2 = standing();
       if (st2.state === 'due') out.push({ ts: now - 20*HOUR, text:'Your statement is <b>due today</b>', sub:'reminded yesterday with the amount', go:'s.billing' });
@@ -6650,6 +6715,7 @@
       "Add location":"Добавить точку",
       "Add photo":"Добавить фото",
       "Add to cart":"В корзину",
+      "type the code they read out, on Billing":"введите код, который вам назовут, в разделе «Счёт»",
       "Address in Yerevan":"Адрес в Ереване",
       "After delivery":"После доставки",
       "All":"Все",
@@ -7265,6 +7331,7 @@
       ["^(\\d+) handovers?$","Передач: $1"],
       ["^(\\d+) handovers? from (\\d+) shops$","Передач: $1, из $2 магазинов"],
       ["^Start checking · (\\d+)$","Начать проверку · $1"],
+      ["^(.+) counted (.+), not (.+)\\. The office has both numbers; nothing was recorded as paid\\.$","$1 насчитали $2, а не $3. У офиса есть обе суммы; оплата не записана."],
       ["^For (\\d+) orders? \\u00b7 (.+)\\. Count it first\\. Typing the code is you saying you have it\\.$","За $1 {1:заказ|заказа|заказов} · $2. Сначала пересчитайте. Ввод кода — это ваше подтверждение, что деньги у вас."],
       ["^Hand over ([\\d\\u00a0 ]+\\u058f)$","Передать $1"],
       ["^Got it \\u00b7 ([\\d\\u00a0 ]+\\u058f)$","Получил · $1"],
@@ -7755,7 +7822,7 @@
         '<div class="two"><label class="f"><span>Phone</span><input class="in" id="p_phone" value="'+esc(me.phone||'')+'"></label>'+
         '<label class="f"><span>City</span><input class="in" value="Yerevan" disabled></label></div>'+
         '<label class="f"><span>Default delivery address</span><input class="in" id="p_addr" value="'+esc(me.address||'')+'"></label>'+
-        '<button class="btn" data-act="savereader">Save</button>'+
+        '<button class="btn" data-dock data-act="savereader">Save</button>'+
         '<h2>Notifications</h2><div class="card">'+
           toggle('In the app', 'New offers, order updates, review reminders', true, 'nop')+
           toggle('Email', 'Order events only — never offers', me.email!==false, 'togemail')+
@@ -8828,7 +8895,8 @@
         var br = shopBreakdown().filter(function(x){ return x.id === a })[0];
         if (!br || !br.owed){ render(); break; }
         if (settleOpen(a)){ toast('You already have one open with them'); render(); break; }
-        db.settles.push({ id: 'st'+(db.settles.length+1), courier: db.me.courierId, seller: a,
+        db.settles.push({ id: 'st' + (db.settles.length + 1) + ((SYNC && SYNC.mode === 'shared') ? '-' + SYNC.device : ''),
+                          courier: db.me.courierId, seller: a,
                           subs: br.unpaid.map(function(x){ return x.sb.no }),
                           amount: br.owed, code: fourDigits(), at: Date.now(), state: 'open' });
         toast('Read the code out \u2014 nothing is recorded until they type it');
@@ -9529,6 +9597,7 @@
       return (db[kind] || []).some(function(x){ return String(x.id) === String(id) });
     },
     mode: function(){ return SYNC.mode },
+    screen: function(){ return view.screen },
     get: function(kind, id){
       var x = (db[kind] || []).filter(function(r){ return String(r.id) === String(id) })[0];
       return x ? JSON.parse(JSON.stringify(x)) : null;
@@ -9536,6 +9605,31 @@
   };
   /* ==== end of shared test world ============================================ */
 
+  var DOCK_MQ = window.matchMedia ? window.matchMedia('(max-width:560px)') : null;
+  function renderDock(){
+    var dock = document.getElementById('dock'), app = document.getElementById('app');
+    if (!dock || !app) return;
+    dock.innerHTML = '';
+    var on = false;
+    if (DOCK_MQ && DOCK_MQ.matches){
+      /* a screen can name its action group outright (Buy + Add to cart) */
+      var marked = [].slice.call(app.querySelectorAll('[data-dock]')).filter(function(b){ return b.offsetParent !== null; });
+      if (marked.length === 1){ dock.appendChild(marked[0]); on = true; }
+    }
+    if (!on && DOCK_MQ && DOCK_MQ.matches){
+      var primary = [].slice.call(app.querySelectorAll('button.btn.wide')).filter(function(b){
+        return !/\b(ghost|link|danger|sm)\b/.test(b.className) && b.offsetParent !== null;
+      });
+      if (primary.length === 1){ dock.appendChild(primary[0]); on = true; }
+    }
+    dock.classList.toggle('on', on);
+    document.body.classList.toggle('has-dock', on);
+    if (on) document.body.style.setProperty('--dock-h', dock.offsetHeight + 'px');
+  }
+  if (DOCK_MQ){
+    var redock = function(){ render(); };
+    if (DOCK_MQ.addEventListener) DOCK_MQ.addEventListener('change', redock); else if (DOCK_MQ.addListener) DOCK_MQ.addListener(redock);
+  }
   function render(moved){
     if (db.me.role === 'seller' && myApp() && ['s.reg','x.auth','x.settings','x.notifs'].indexOf(view.screen) < 0)
       view.screen = 's.apply';
@@ -9550,6 +9644,7 @@
     app.innerHTML = html;
     app.classList.toggle('bottom-act', !!app.querySelector('.page-tail'));
     i18n();
+    renderDock();
     wireDeck();
     if (moved){
       var h = app.querySelector('h1');
