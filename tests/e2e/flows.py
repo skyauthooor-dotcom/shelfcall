@@ -729,6 +729,9 @@ async def billing_counts_every_order_on_the_day_it_was_placed(t):
     n_days, n_labels = await shop.evaluate("""() => [document.querySelectorAll('.chart.bare .bar').length,
         document.querySelectorAll('.chart.bare text.dnum').length]""")
     assert n_days >= 28 and n_labels == n_days, (n_days, n_labels)
+    # as many columns as the screen holds, the rest a sideways scroll in the chart
+    assert await shop.evaluate("() => { const w = document.querySelector('.chart.scroll .cwrap'); return w.scrollWidth > w.clientWidth }")
+    assert await shop.evaluate("() => document.documentElement.scrollWidth <= innerWidth")
     await t.press(shop, 'earn:all')
     assert await _contains(shop, 'All periods together')
     # all of time scrolls sideways inside the chart, never the page
@@ -755,6 +758,59 @@ async def office_sees_everything_about_an_order(t):
                  '+374 77 18 42 06', 'The Chrysalids', '4 300', '5 300', 'Placed', 'Ready', 'Collected by the courier', 'Delivered']:
         assert need.replace(' ', '\u00a0') in txt or need in txt, 'the office order page does not show ' + need
     assert await admin.evaluate("() => !!document.querySelector('main .cover')"), 'no book picture'
+
+
+@flow
+async def courier_paying_at_the_counter_needs_the_shops_code(t):
+    reader = await t.phone('/reader'); admin = await t.phone('/admin')
+    shop = await t.phone('/seller'); courier = await t.phone('/courier')
+    title = 'Flow P ' + str(random.randint(1000, 9999))
+    rid = await t.reader_asks(reader, title)
+    await t.admin_passes_request(admin, rid)
+    oid = await t.shop_offers(shop, rid, title)
+    await t.admin_passes_offer(admin, oid)
+    ordid = await t.reader_buys(reader, rid, oid, 'courier')
+    sub = t._ord(ordid)['subs'][0]
+    await t.until(lambda: t._has(shop, 'orders', ordid), 10)
+    await t.go(shop, 's.order', sub['no'])
+    await t.press(shop, 'ready:%s:%s' % (ordid, sub['no']))
+    await t.until(lambda: t._ord(ordid)['subs'][0]['status'] == 'ready', 8)
+    await t.until(lambda: t._has(courier, 'orders', ordid), 10)
+    await t.until(lambda: courier.evaluate("(o) => { const x = SC_DEBUG.get('orders', o); return !!x && x.subs[0].status === 'ready' }", ordid), 10)
+    await t.go(courier, 'c.job', sub['no'])
+    await t.press(courier, 'cmode:%s:%s' % (ordid, sub['no']))           # pay the shop at the counter
+    await t.until(lambda: t._ord(ordid)['subs'][0].get('payMode') == 'onpickup' and t._ord(ordid)['subs'][0].get('payCode'), 8)
+    code = t._ord(ordid)['subs'][0]['payCode']
+    assert not await _contains(courier, code), 'the courier sees the shop code'
+    await t.until(lambda: _contains(shop, code), 10, 'the shop never got a code to give')
+    pc = '#pc_' + sub['no']
+    await courier.fill(pc, '1111' if code != '1111' else '2222')
+    await t.press(courier, 'ccollect:%s:%s' % (ordid, sub['no']))
+    assert t._ord(ordid)['subs'][0]['status'] == 'ready', 'collected and paid without the shop code'
+    assert await _contains(courier, 'not the shop'), 'no word about the wrong code'
+    await courier.fill(pc, code)
+    await t.press(courier, 'ccollect:%s:%s' % (ordid, sub['no']))
+    await t.until(lambda: t._ord(ordid)['subs'][0]['status'] == 'shipped', 8, 'the right code did not record the collection')
+    assert any(l.get('sub') == sub['no'] and l.get('from') == 'courier' and l.get('to') == 'shop' for l in t.world()['ledger'])
+
+
+@flow
+async def back_goes_to_the_screen_you_came_from(t):
+    shop = await t.phone('/seller' + t.own_world())
+    await t.go(shop, 's.billing')
+    await t.press(shop, 'earn:all')
+    no = await shop.evaluate("() => document.querySelector('main [data-go=\"s.order\"]').getAttribute('data-p')")
+    await t.go(shop, 's.order', no)
+    await t.press(shop, 'goback')
+    assert await shop.evaluate('() => SC_DEBUG.screen()') == 's.earn', 'back from an order did not return to the history'
+    assert await _contains(shop, 'All periods together')
+    await t.press(shop, 'goback')
+    assert await shop.evaluate('() => SC_DEBUG.screen()') == 's.billing'
+    # the same order opened from Orders goes back to Orders
+    await t.go(shop, 's.orders')
+    await t.go(shop, 's.order', no)
+    await t.press(shop, 'goback')
+    assert await shop.evaluate('() => SC_DEBUG.screen()') == 's.orders'
 
 
 async def _contains(pg, s):
