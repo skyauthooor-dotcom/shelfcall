@@ -108,7 +108,7 @@ SCRIPTED = {
     'reader': [('go', 'r.request', 'r2'), ('act', 'add:'), ('go', 'r.cart', ''), ('act', 'checkout'),
                ('act', 'setwhen:'), ('act', 'donewhen'), ('act', 'editdetails'),
                ('go', 'r.request', 'r1'), ('ask', 'closereq:'), ('go', 'x.settings', '')],
-    'seller': [('go', 's.newoffer', 'r1'), ('go', 's.billing', ''), ('go', 's.stats', '')],
+    'seller': [('go', 's.newoffer', 'r1'), ('go', 's.billing', ''), ('go', 's.reviews', '')],
     'ops':    [('go', 'a.req', 'r7'), ('go', 'a.offer', 'o5'), ('go', 'a.apps', '')],
     'courier': [('go', 'c.jobs', '')],
 }
