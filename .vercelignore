@@ -1,12 +1,8 @@
-# Vercel only needs public/. Everything else is source and tooling, and
-# keeping the Python scripts out of the upload stops Vercel from guessing
-# that this is a Python app.
-/build
+# Vercel builds public/ itself (vercel.json: python3 build/build.py), so it
+# needs prototype/, build/ and docs/. The rest is tooling and notes.
 /i18n
-/prototype
 /design-system
-/docs
 /out
-*.py
 README.md
 push.bat
+next-commit.txt

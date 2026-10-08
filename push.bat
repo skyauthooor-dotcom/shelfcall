@@ -3,7 +3,8 @@ setlocal EnableDelayedExpansion
 rem ===========================================================================
 rem  Shelfcall - rebuild the site and push everything to GitHub.
 rem
-rem  Double-click this file, or run it from a terminal in this folder.
+rem  Double-click this file. Nothing to type except, the first time only,
+rem  your name and email for git and the GitHub sign-in window.
 rem  Safe to run again after every change: it rebuilds public\, commits
 rem  whatever changed and pushes. Vercel redeploys on each push.
 rem ===========================================================================
@@ -69,11 +70,18 @@ rem ---- commit whatever changed ----------------------------------------------
 git add -A
 git diff --cached --quiet
 if errorlevel 1 (
-  set "MSG=Update Shelfcall prototype"
-  set /p "MSG=  Commit message, or Enter for the default: "
-  git commit -q -m "!MSG!"
-  if errorlevel 1 ( echo  The commit failed. & goto :fail )
-  echo  Committed.
+  rem  The message is written in advance in next-commit.txt, which is used
+  rem  once and then removed. Without it, a plain default is used.
+  if exist "next-commit.txt" (
+    git commit -q -F next-commit.txt
+    if errorlevel 1 ( echo  The commit failed. & goto :fail )
+    del /q next-commit.txt
+  ) else (
+    git commit -q -m "Update Shelfcall prototype"
+    if errorlevel 1 ( echo  The commit failed. & goto :fail )
+  )
+  echo  Committed:
+  git log -1 --format="    %%s"
 ) else (
   echo  Nothing new to commit.
 )

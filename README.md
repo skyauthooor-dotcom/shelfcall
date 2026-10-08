@@ -47,6 +47,7 @@ docs/
   audit.html                 ← 16 edge cases, each with its status; the drift table, now closed
   supply-test.html           ← the two-week bookseller test, scripts and go/no-go gate
 design-system/               ← tokens, component notes and previews (reference only)
+api/world.js                 ← the shared test world (Vercel function + Redis)
 vercel.json  .vercelignore   ← deploy settings: serve public/, clean URLs, noindex
 push.bat                     ← Windows: rebuild, commit and push to GitHub in one go
 ```
@@ -59,9 +60,10 @@ Edit `prototype/shelfcall-all-roles.html`, then rebuild the site:
 python3 build/build.py        # on Windows: python build\build.py  (or py build\build.py)
 ```
 
-That rewrites everything in `public/`. Commit `public/` together with the
-master — Vercel does not run the build, it serves `public/` exactly as
-committed. The master is the source of truth; the switcher in its top bar is
+That rewrites everything in `public/`, so you can open the pages locally.
+Vercel runs the same build on every deploy (`buildCommand` in `vercel.json`),
+so what goes live always comes from the master, even if `public/` in git is
+out of date. The master is the source of truth; the switcher in its top bar is
 a prototype control that the build strips out of the single-role pages.
 
 The master is a **fragment** (no doctype, no `<head>`), because that is what an
@@ -78,15 +80,16 @@ python3 -m http.server 8000 --directory public     # then http://localhost:8000
 
 ## Deploying
 
-The site is static. Vercel needs no build step and no framework.
+The site is static pages plus one small function (`api/world.js`). Vercel
+builds the pages with Python, which its build machines already have.
 
 1. Push this folder to a GitHub repository (with `public/` committed). On
    Windows, double-click `push.bat`: it rebuilds `public/` (if Python is
    installed), commits whatever changed and pushes to
    `github.com/skyauthooor-dotcom/shelfcall`. Run it again after every change.
 2. In Vercel: **Add New → Project**, import the repository.
-3. Leave **Framework Preset** on *Other*, leave the build and install commands
-   empty. `vercel.json` already points Vercel at `public/`.
+3. Leave **Framework Preset** on *Other*. `vercel.json` already sets the build
+   command (`python3 build/build.py`) and points Vercel at `public/`.
 4. Deploy. Every push to the main branch redeploys; every other branch gets
    its own preview URL, which is the easy way to test a change before it goes
    to the shared link.
@@ -96,6 +99,43 @@ sends `X-Robots-Tag: noindex` on every page, with a `robots.txt` to match —
 the prototype is full of sample people, phone numbers and shops and should not
 turn up in search. Nothing persists on the server: each tester's state lives
 in their own browser tab and resets on reload.
+
+## The shared test
+
+On the deployed site every page joins a shared **world**, so the roles reach
+each other across phones: a reader posts a request on one phone, the admin
+approves it on a laptop, the bookshop sees it in its feed on a third device
+and answers, and the reader sees the offer arrive.
+
+- `api/world.js` is a Vercel function that keeps each world in Redis (Upstash,
+  through its REST API — no npm packages). It needs the **Upstash for Redis**
+  integration on the Vercel project; the integration adds the environment
+  variables (`KV_REST_API_URL` / `KV_REST_API_TOKEN`) by itself.
+- `/all-roles`, `/reader`, `/seller`, `/courier` and `/admin` share the world
+  called `main`, which starts with the sample data. `/empty` has its own world,
+  `empty`, which starts with no requests or orders. Add `?world=anything` to
+  any page to start a separate world for a separate group of testers.
+- The footer of every page says *Shared test* and has **Start over for
+  everyone**, which puts that world back to how it started, on every phone.
+- Everyone playing the reader is Dina, everyone playing the bookseller is Aram
+  Books — there are no accounts in a prototype. Who you are, your theme, your
+  language and what you have read stay on your own device.
+- Changes are sent after every action and each page checks for other people's
+  changes every 3 seconds. A screen is not redrawn while you are typing or a
+  sheet is open. Two people changing the same record: the later one wins.
+- Photos are stored as small JPEGs (640px) inside the record, so the shop's
+  photo reaches the reader's phone.
+- With no database (opened from disk, as an artifact, or before Redis is
+  added) a page falls back to the old behaviour: this tab only, with the
+  Light / Busy switch in the footer.
+
+This is a test harness. Anyone with the link can change a world, there is no
+sign-in and nothing is private. None of it should be carried into the real
+app, where the server owns the rules (see the project instructions).
+
+The sync code is one block in the master, between `shared test world` and
+`end of shared test world`. The screens know nothing about it: they change
+`db` and call `render()` as before, and the block sends the difference.
 
 ## How the prototype is put together
 
@@ -124,8 +164,8 @@ It is a **prototype**: the flows are real and the state is real, so the
 closing rules, the cart flags, the handover code and the courier ledger all
 behave as specified. Photos are held as object URLs on the device.
 
-It is **not the product**: no server, no accounts, no persistence, no
-payments. Nothing here should be carried into production except the screen
+It is **not the product**: no accounts, no payments, and the only server is
+the shared test world described above — a test harness, not a backend. Nothing here should be carried into production except the screen
 designs, the copy and the state machines.
 
 ## The clocks
