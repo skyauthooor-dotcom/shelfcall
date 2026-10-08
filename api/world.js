@@ -7,7 +7,7 @@
  *
  *   GET  /api/world?space=main&v=12      -> { v, same:true } or { v, world }
  *   POST /api/world?space=main  { op:'init',  world }   create it if nobody has
- *                               { op:'patch', patch }   merge record by record
+ *                               { op:'patch', ops }     merge field by field
  *                               { op:'reset', world }   start over for everyone
  *
  * Storage is Redis over Upstash's REST API: no npm packages, nothing to
@@ -24,7 +24,7 @@ const TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TO
 const MAX_BYTES = 4 * 1024 * 1024;           // Vercel's request limit is 4.5 MB
 const TTL_SECONDS = 60 * 60 * 24 * 30;       // an untouched world expires after 30 days
 
-async function redis(cmd) {
+let redis = async function redis(cmd) {
   const r = await fetch(URL_, {
     method: 'POST',
     headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
@@ -33,7 +33,7 @@ async function redis(cmd) {
   const j = await r.json();
   if (!r.ok || j.error) throw new Error(j.error || `redis ${r.status}`);
   return j.result;
-}
+};
 
 /* Write a new world only if nobody else wrote one since we read it. */
 const CAS = `
@@ -43,7 +43,11 @@ redis.call('SET', KEYS[2], ARGV[3], 'EX', ARGV[4])
 redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[4])
 return 1`;
 
-/* ---- the same merge rules the page uses ---------------------------------- */
+const SyncCore = require('./_sync-core.js');   // the same merge rules the page uses
+
+/* ---- the first format: whole records, later one wins ----------------------
+   Kept only so a tab opened before the field-by-field version keeps working
+   until it is reloaded. It sends { patch }, newer tabs send { ops }. */
 const isMap = (x) => x && typeof x === 'object' && !Array.isArray(x);
 const keyOf = (x) => (isMap(x) && x.id != null ? 'i:' + x.id : 'j:' + JSON.stringify(x));
 
@@ -115,11 +119,14 @@ module.exports = async function handler(req, res) {
     }
 
     if (op === 'patch') {
-      if (!isMap(body.patch)) return send(res, 400, { error: 'patch missing' });
+      const ops = Array.isArray(body.ops) ? body.ops : null;
+      if (!ops && !isMap(body.patch)) return send(res, 400, { error: 'ops missing' });
+      if (ops && ops.length > 20000) return send(res, 413, { error: 'Too many changes at once' });
       for (let i = 0; i < 8; i++) {
         const v = Number(await redis(['GET', kV])) || 0;
         const raw = v ? await redis(['GET', kW]) : null;
-        const world = applyPatch(raw ? JSON.parse(raw) : {}, body.patch);
+        const current = raw ? JSON.parse(raw) : {};
+        const world = ops ? SyncCore.apply(current, ops) : applyPatch(current, body.patch);
         const out = JSON.stringify(world);
         if (out.length > MAX_BYTES) return send(res, 413, { error: 'World too large' });
         const ok = await redis(['EVAL', CAS, '2', kV, kW, String(v), String(v + 1), out, String(TTL_SECONDS)]);
@@ -135,4 +142,5 @@ module.exports = async function handler(req, res) {
   }
 };
 
-module.exports.applyPatch = applyPatch;   // for the local test
+module.exports.applyPatch = applyPatch;   // for the tests
+module.exports.redis = (fn) => { redis = fn; };   // tests swap in a fake Redis
