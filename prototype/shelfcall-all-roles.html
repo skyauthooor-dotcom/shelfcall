@@ -9413,8 +9413,14 @@
         if (SYNC.again){ SYNC.again = false; syncPush(); }
       });
   }
+  /* A tab in the background keeps checking, only less often: a bookshop with
+     the reader's tab in front on a laptop still has a fresh feed waiting when
+     it switches back. Coming back to a tab checks at once (see syncJoin). */
+  var SYNC_HIDDEN_POLL_MS = 15000;
   function syncPull(){
-    if (SYNC.mode !== 'shared' || SYNC.inflight || document.hidden) return;
+    if (SYNC.mode !== 'shared' || SYNC.inflight) return;
+    if (document.hidden && Date.now() - (SYNC.lastPull || 0) < SYNC_HIDDEN_POLL_MS) return;
+    SYNC.lastPull = Date.now();
     SYNC.inflight = true;
     syncApi('GET')
       .then(function(res){
