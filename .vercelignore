@@ -1,8 +1,10 @@
 # Vercel builds public/ itself (vercel.json: python3 build/build.py), so it
-# needs prototype/, build/ and docs/. The rest is tooling and notes.
+# needs prototype/, build/ and docs/. The rest is tooling, tests and notes.
 /i18n
 /design-system
 /out
+/tests
 README.md
 push.bat
+test.bat
 next-commit.txt

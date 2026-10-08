@@ -48,6 +48,9 @@ docs/
   supply-test.html           ← the two-week bookseller test, scripts and go/no-go gate
 design-system/               ← tokens, component notes and previews (reference only)
 api/world.js                 ← the shared test world (Vercel function + Redis)
+api/_sync-core.js            ← its merge rules; the master carries an identical copy
+tests/                       ← unit tests, end-to-end flows, contrast audit (see Testing)
+test.bat                     ← Windows: run every check in one go
 vercel.json  .vercelignore   ← deploy settings: serve public/, clean URLs, noindex
 push.bat                     ← Windows: rebuild, commit and push to GitHub in one go
 ```
@@ -120,9 +123,12 @@ and answers, and the reader sees the offer arrive.
 - Everyone playing the reader is Dina, everyone playing the bookseller is Aram
   Books — there are no accounts in a prototype. Who you are, your theme, your
   language and what you have read stay on your own device.
-- Changes are sent after every action and each page checks for other people's
-  changes every 3 seconds. A screen is not redrawn while you are typing or a
-  sheet is open. Two people changing the same record: the later one wins.
+- Changes are sent after every action, field by field: the admin approving a
+  request and a shop marking it seen are two edits that both survive. Only
+  two people changing the very same field collide, and then the later one
+  wins. Each page checks for other people's changes every 3 seconds (every
+  15 while its tab is in the background, and at once when you come back to
+  it), and does not redraw while you are typing or a sheet is open.
 - Photos are stored as small JPEGs (640px) inside the record, so the shop's
   photo reaches the reader's phone.
 - With no database (opened from disk, as an artifact, or before Redis is
@@ -135,7 +141,49 @@ app, where the server owns the rules (see the project instructions).
 
 The sync code is one block in the master, between `shared test world` and
 `end of shared test world`. The screens know nothing about it: they change
-`db` and call `render()` as before, and the block sends the difference.
+`db` and call `render()` as before, and the block sends the difference. The
+merge rules themselves are in `api/_sync-core.js`; the master carries an
+identical copy between the `sync-core` markers, and both the build and the
+unit tests stop if the two differ.
+
+## Testing
+
+```bash
+python3 build/build.py                    # build first: the tests use public/
+node --test tests/*.test.js               # merge rules and the server (no packages)
+python3 tests/e2e/flows.py                # every cross-role flow, one browser per role
+python3 tests/tools/contrast.py           # contrast of every screen, light and dark
+```
+
+On Windows, `test.bat` runs all four. The end-to-end flows and the contrast
+audit need Playwright once: `pip install playwright` and
+`python -m playwright install chromium`.
+
+The flows start `tests/tools/devserver.js`, which serves `public/` the way
+Vercel does and runs `api/world.js` against an in-memory Redis. Each role is
+its own browser, so it is three or four phones talking to one server:
+
+- a request reaches the shop only after the admin approves it, on a shop page
+  that was open all along, and the approval survives the shop opening it;
+- a request or an offer sent back never reaches the other side;
+- an offer with a photo reaches the reader, and the reader opening it shows
+  as "seen" for the shop;
+- a pickup order from cart to handover code to review, and a courier order
+  from cart to collection to delivery and the cash in the ledger;
+- the reader cancelling, the shop removing an offer, the courier failing a
+  delivery, the reader closing a request;
+- a shop tab left in the background still receiving the approved request;
+- two phones writing at once, typing never wiped by an update, start over for
+  everyone, separate worlds, and every page still working opened from disk.
+
+The contrast audit checks text (4.5:1, 3:1 when large), placeholders and the
+edge of everything you can press (3:1), measured as the browser paints it.
+
+## Light and dark
+
+Light, Dark or Match my phone is remembered on the device for every page of
+the site, applied before the first paint, and the browser's own controls
+(scrollbars, the list a `<select>` opens) follow it.
 
 ## How the prototype is put together
 
