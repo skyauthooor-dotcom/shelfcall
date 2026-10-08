@@ -1226,7 +1226,10 @@
     var n = db.seq[key];
     while (taken[prefix + n]) n++;
     if (!peek) db.seq[key] = n + 1;
-    return prefix ? prefix + n : n;
+    /* in the shared test two phones can make a request in the same second;
+       a device tag keeps 'r8' from one and 'r8' from the other apart */
+    var tag = (SYNC && SYNC.mode === 'shared') ? '-' + SYNC.device : '';
+    return prefix ? prefix + n + tag : n;
   }
   function myRequests(){ return db.requests.filter(function(r){ return r.reader===db.me.readerId }) }
   /* ---- how far an offer may still be edited --------------------------------
@@ -1731,7 +1734,25 @@
         '<option value="courier"'+(role==='courier'?' selected':'')+'>Courier</option>'+
         '<option value="ops"'+(role==='ops'?' selected':'')+'>Admin</option></select></span>'+
       '</nav>';
-    document.getElementById('proto').innerHTML =
+    renderProto();
+  }
+  function renderProto(){
+    var role = db.me.role, el = document.getElementById('proto');
+    if (!el) return;
+    var shared = SYNC && SYNC.mode === 'shared';
+    el.innerHTML = (shared
+      ? '<div class="loadsw"><span class="eyebrow" style="margin:0">Shared test</span>'+
+          '<span class="small muted">'+esc(SYNC.failures > 2
+            ? 'Cannot reach the server. What you do here waits on this phone and is sent when it is back.'
+            : 'Everyone on this link sees the same requests, offers and orders.')+'</span>'+
+          '<button class="btn ghost" data-ask="worldreset" data-ask-title="Start over for everyone?" '+
+            'data-ask-body="Every request, offer and order made on this link is removed from every phone, and the test goes back to how it started." '+
+            'data-ask-label="Start over">Start over for everyone</button></div>'+
+        '<p style="margin:12px 0 0">'+esc('Everyone playing the reader is Dina, everyone playing the bookseller is Aram Books.' +
+          (document.getElementById('roleSel') ? ' Choose your role in the top bar.'
+            : ' Open the other roles from the front page, on another phone or in another tab.'))+'</p>'
+      : '') +
+      (shared ? '' :
       '<div class="loadsw"><span class="eyebrow" style="margin:0">Test it</span>'+
         '<div class="seg" role="group" aria-label="How much is going on">'+
           '<button data-act="light" aria-pressed="'+(!db.busy)+'">Light</button>'+
@@ -1743,7 +1764,7 @@
       (role==='seller' ? 'You are Aram Books, two branches, 12% after the free month.'
        : role==='courier' ? 'You are Vahe, delivering books across Yerevan and collecting the cash.'
        : role==='ops' ? 'You are on the Shelfcall team, looking after shops, requests and orders.'
-       : 'You are Dina, in Yerevan.'))+'</p>';
+       : 'You are Dina, in Yerevan.'))+'</p>');
   }
 
   /* ============================== reader screens ============================== */
@@ -8017,6 +8038,7 @@
     if (name === 'unconfirm'){ view.confirm = null; render(); return; }
     switch(name){
       case 'sheetclose': { view.sheet = null; render(); break; }
+      case 'worldreset': { view.sheet = null; syncReset(); break; }
       case 'startgate': {
         var g1 = waitingReqs().sort(function(x, y){ return x.posted - y.posted })[0];
         var g2 = waitingOffers().sort(function(x, y){ return x.sent - y.sent })[0];
@@ -9059,6 +9081,280 @@
     card.addEventListener('lostpointercapture', up);
   }
 
+  /* ==== shared test world ====================================================
+     Every tab used to be its own world: a request posted on one phone never
+     reached the bookshop on another. On the deployed site the state now lives
+     on the server as well, so everyone on the same link sees the same
+     requests, offers and orders, whichever role they are playing.
+
+     How it works, in one paragraph. The screens do not know any of this. They
+     mutate `db` and call render(), as they always have. After every render
+     the difference between `db` and the last copy the server confirmed is
+     worked out per record - a request, an offer, an order, one shop - and
+     only those records are sent. Every few seconds the tab asks whether the
+     world has moved on, and if it has, takes the new world and lays its own
+     unsent changes back on top. Two people editing two different records
+     never collide; two people editing the same record, the later one wins.
+
+     What stays on this device: who you are and which role you are playing,
+     the theme, the language and what you have read. Everyone playing the
+     reader is Dina, everyone playing the bookseller is Aram Books - there are
+     no accounts in a prototype.
+
+     Opened from disk, or as an artifact, or with the server's database not
+     set up, the page falls back to the old behaviour: this tab only. */
+
+  var SYNC = {
+    space: 'main',          /* which world; the build sets it, ?world= overrides */
+    worldSeed: null,        /* shapes a brand-new world before anyone has used it */
+    localSeed: null,        /* demo data for the this-tab-only fallback */
+    mode: 'local',          /* 'local' | 'shared' */
+    v: 0,                   /* the server's version of the world we hold */
+    base: null,             /* the world as the server last confirmed it */
+    pristine: null,         /* the world as this page started it, for "start over" */
+    inflight: false, again: false, timer: null, poller: null,
+    dirty: false, staleView: false, lastSync: 0, failures: 0,
+    device: (function(){
+      try {
+        var d = localStorage.getItem('sc_device');
+        if (!d){ d = Math.random().toString(36).slice(2, 6); localStorage.setItem('sc_device', d); }
+        return d;
+      } catch(e){ return Math.random().toString(36).slice(2, 6); }
+    })()
+  };
+  /* per person, per device: never sent, never overwritten */
+  var SYNC_LOCAL = { me:1, theme:1, lang:1, notifSeen:1, busy:1, delivery:1 };
+  var SYNC_POLL_MS = 3000;
+
+  function syncShared(){
+    var out = {};
+    Object.keys(db).forEach(function(k){ if (!SYNC_LOCAL[k]) out[k] = db[k]; });
+    return JSON.parse(JSON.stringify(out));
+  }
+  function syncKeyOf(x){
+    return (x && typeof x === 'object' && !Array.isArray(x) && x.id != null) ? 'i:' + x.id : 'j:' + JSON.stringify(x);
+  }
+  function syncIsMap(x){ return x && typeof x === 'object' && !Array.isArray(x) }
+
+  /* what changed between two copies of the world, record by record */
+  function syncDiff(a, b){
+    var p = {}, n = 0;
+    Object.keys(b).forEach(function(k){
+      var A = a[k], B = b[k];
+      if (JSON.stringify(A) === JSON.stringify(B)) return;
+      if (Array.isArray(A) && Array.isArray(B)){
+        var am = {}, bm = {}, up = [], rm = [];
+        A.forEach(function(x){ am[syncKeyOf(x)] = JSON.stringify(x) });
+        B.forEach(function(x){ var key = syncKeyOf(x); bm[key] = 1;
+          if (am[key] !== JSON.stringify(x)) up.push(x) });
+        Object.keys(am).forEach(function(key){ if (!bm[key]) rm.push(key) });
+        p[k] = { t:'list', up: up, rm: rm };
+      } else if (syncIsMap(A) && syncIsMap(B)){
+        var mu = {}, mr = [];
+        Object.keys(B).forEach(function(kk){
+          if (JSON.stringify(A[kk]) !== JSON.stringify(B[kk])) mu[kk] = B[kk] });
+        Object.keys(A).forEach(function(kk){ if (!(kk in B)) mr.push(kk) });
+        p[k] = { t:'map', up: mu, rm: mr };
+      } else {
+        p[k] = { t:'set', v: B };
+      }
+      n++;
+    });
+    Object.keys(a).forEach(function(k){ if (!(k in b)){ p[k] = { t:'del' }; n++; } });
+    return n ? p : null;
+  }
+  /* lay a set of changes on top of a world. The server runs the same rules. */
+  function syncApply(world, p){
+    var w = JSON.parse(JSON.stringify(world || {}));
+    if (!p) return w;
+    Object.keys(p).forEach(function(k){
+      var c = p[k];
+      if (c.t === 'set'){ w[k] = c.v; return; }
+      if (c.t === 'del'){ delete w[k]; return; }
+      if (c.t === 'map'){
+        var m = syncIsMap(w[k]) ? w[k] : {};
+        (c.rm || []).forEach(function(kk){ delete m[kk] });
+        Object.keys(c.up || {}).forEach(function(kk){ m[kk] = c.up[kk] });
+        w[k] = m; return;
+      }
+      if (c.t === 'list'){
+        var arr = Array.isArray(w[k]) ? w[k] : [], gone = {};
+        (c.rm || []).forEach(function(key){ gone[key] = 1 });
+        arr = arr.filter(function(x){ return !gone[syncKeyOf(x)] });
+        (c.up || []).forEach(function(x){
+          var key = syncKeyOf(x), at = -1;
+          for (var i = 0; i < arr.length; i++) if (syncKeyOf(arr[i]) === key){ at = i; break; }
+          if (at >= 0) arr[at] = x; else arr.push(x);
+        });
+        w[k] = arr;
+      }
+    });
+    return w;
+  }
+  /* put a world into `db`, keeping this device's own keys */
+  function syncAdopt(world){
+    /* a copy: `db` is edited in place by every screen, and SYNC.base must
+       not move with it or no change would ever look like a change */
+    world = JSON.parse(JSON.stringify(world));
+    Object.keys(db).forEach(function(k){ if (!SYNC_LOCAL[k] && !(k in world)) delete db[k]; });
+    Object.keys(world).forEach(function(k){ if (!SYNC_LOCAL[k]) db[k] = world[k]; });
+    /* "3 days ago" is measured from a clock frozen at load. Records made on
+       another phone after this page loaded would read as being in the future,
+       so the clock moves on whenever the world does. */
+    now = Date.now();
+  }
+
+  function syncApi(method, body){
+    var url = '/api/world?space=' + encodeURIComponent(SYNC.space) +
+              (method === 'GET' ? '&v=' + SYNC.v : '');
+    return fetch(url, {
+      method: method, cache: 'no-store',
+      headers: body ? { 'Content-Type': 'application/json' } : {},
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function(r){
+      return r.json().catch(function(){ return {} }).then(function(j){
+        if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+        return j;
+      });
+    });
+  }
+
+  /* Only redraw under somebody's feet when it cannot cost them anything:
+     not while they are typing, not while a sheet is asking them something. */
+  function syncCanRedraw(){
+    var a = document.activeElement;
+    if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.id !== 'roleSel') return false;
+    if (view.sheet || SYNC.dirty) return false;
+    return true;
+  }
+  function syncRedraw(){
+    if (!syncCanRedraw()){ SYNC.staleView = true; return; }
+    SYNC.staleView = false;
+    try { render(); }
+    catch(err){
+      /* the record this screen was showing went away on another device */
+      view.screen = HOME[db.me.role] || 'r.requests'; view.p = {};
+      render();
+    }
+  }
+
+  /* called at the end of every render(): send whatever the screens changed */
+  function syncAfterRender(){
+    if (!SYNC) return;
+    SYNC.dirty = false;
+    if (SYNC.mode !== 'shared') return;
+    clearTimeout(SYNC.timer);
+    SYNC.timer = setTimeout(syncPush, 150);
+  }
+  function syncPush(){
+    if (SYNC.mode !== 'shared') return;
+    if (SYNC.inflight){ SYNC.again = true; return; }
+    var sent = syncShared();
+    var patch = syncDiff(SYNC.base, sent);
+    if (!patch) return;
+    SYNC.inflight = true;
+    syncApi('POST', { op: 'patch', base: SYNC.v, patch: patch, device: SYNC.device })
+      .then(function(res){ syncTake(res, sent); })
+      .catch(syncFailed)
+      .then(function(){
+        SYNC.inflight = false;
+        if (SYNC.again){ SYNC.again = false; syncPush(); }
+      });
+  }
+  function syncPull(){
+    if (SYNC.mode !== 'shared' || SYNC.inflight || document.hidden) return;
+    SYNC.inflight = true;
+    syncApi('GET')
+      .then(function(res){ if (!res.same) syncTake(res, syncShared()); else syncOk(); })
+      .catch(syncFailed)
+      .then(function(){ SYNC.inflight = false; if (SYNC.again){ SYNC.again = false; syncPush(); } });
+  }
+  /* the server sent a world. `mine` is what this tab held when it asked;
+     anything changed here since then is laid back on top. */
+  function syncTake(res, mine){
+    if (!res || !res.world) return;
+    var before = JSON.stringify(syncShared());
+    var later = syncDiff(mine, syncShared());
+    var unsent = syncDiff(SYNC.base, mine);
+    SYNC.base = res.world; SYNC.v = res.v;
+    var merged = syncApply(syncApply(res.world, unsent), later);
+    syncAdopt(merged);
+    syncOk();
+    if (JSON.stringify(syncShared()) !== before) syncRedraw();
+    if (unsent || later) syncPush();
+  }
+  function syncOk(){
+    var wasDown = SYNC.failures > 2;
+    SYNC.failures = 0; SYNC.lastSync = Date.now();
+    if (wasDown) renderProto();
+  }
+  function syncFailed(){
+    SYNC.failures++;
+    if (SYNC.failures === 3) renderProto();   /* say so, once */
+  }
+
+  /* start-up: join the shared world, or fall back to this tab only */
+  function syncBoot(){
+    try {
+      var q = new URLSearchParams(location.search).get('world');
+      if (q && /^[a-z0-9-]{1,32}$/i.test(q)) SYNC.space = q.toLowerCase();
+    } catch(e){}
+    var local = function(){
+      SYNC.mode = 'local';
+      if (SYNC.worldSeed) SYNC.worldSeed();
+      if (SYNC.localSeed) SYNC.localSeed();
+      render();
+    };
+    if (!/^https?:$/.test(location.protocol) || !window.fetch){ local(); return; }
+    document.getElementById('app').innerHTML =
+      '<p class="sub" style="margin-top:24px">Joining the shared test…</p>';
+    var gave = false;
+    var giveUp = setTimeout(function(){ gave = true; local(); }, 4000);
+    SYNC.v = -1;
+    syncApi('GET').then(function(res){
+      if (gave) return;
+      clearTimeout(giveUp);
+      if (res.world){ syncJoin(res); return; }
+      /* nobody has used this world yet: this page shapes it */
+      if (SYNC.worldSeed) SYNC.worldSeed();
+      return syncApi('POST', { op: 'init', world: syncShared(), device: SYNC.device })
+        .then(syncJoin);
+    }).catch(function(){ if (!gave){ clearTimeout(giveUp); local(); } });
+  }
+  function syncJoin(res){
+    SYNC.mode = 'shared';
+    SYNC.pristine = syncShared();
+    if (SYNC.worldSeed){ SYNC.worldSeed(); SYNC.pristine = syncShared(); }
+    SYNC.base = res.world; SYNC.v = res.v;
+    syncAdopt(res.world);
+    SYNC.lastSync = Date.now();
+    render();
+    SYNC.poller = setInterval(syncPull, SYNC_POLL_MS);
+    document.addEventListener('visibilitychange', function(){ if (!document.hidden) syncPull(); });
+    window.addEventListener('focus', syncPull);
+  }
+  /* everyone back to the world as it was on day one */
+  function syncReset(){
+    if (SYNC.mode !== 'shared') return;
+    var fresh = SYNC.pristine || syncShared();
+    SYNC.inflight = true;
+    syncApi('POST', { op: 'reset', world: fresh, device: SYNC.device })
+      .then(function(res){
+        SYNC.base = res.world; SYNC.v = res.v;
+        syncAdopt(res.world);
+        db.cart = db.cart || [];
+        view.screen = HOME[db.me.role] || 'r.requests'; view.p = {}; view.draft = {};
+        toast('Started over for everyone');
+      })
+      .catch(function(){ toast('Could not reach the server. Nothing was changed.') })
+      .then(function(){ SYNC.inflight = false; });
+  }
+  document.addEventListener('input', function(){ SYNC.dirty = true; });
+  document.addEventListener('focusout', function(){
+    setTimeout(function(){ if (SYNC.staleView && syncCanRedraw()) syncRedraw(); }, 0);
+  });
+  /* ==== end of shared test world ============================================ */
+
   function render(moved){
     if (db.me.role === 'seller' && myApp() && ['s.reg','x.auth','x.settings','x.notifs'].indexOf(view.screen) < 0)
       view.screen = 's.apply';
@@ -9078,6 +9374,7 @@
       var h = app.querySelector('h1');
       if (h){ h.setAttribute('tabindex','-1'); h.focus({preventScroll:true}); }
     }
+    syncAfterRender();
   }
 
   document.addEventListener('click', function(e){
@@ -9134,24 +9431,41 @@
     if (hint) hint.textContent = ok ? '' : 'Fill the fields above and this opens.';
   });
 
+  /* A photo is kept as a small JPEG written into the record itself. An object
+     URL only means something on the phone that made it; in the shared test the
+     bookshop's photo has to reach the reader's phone. 640px on the long side
+     is plenty to judge a copy's condition and keeps an offer to tens of KB. */
+  function shrinkPhoto(file, done){
+    try {
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function(){
+        var k = Math.min(1, 640 / Math.max(img.width, img.height));
+        var c = document.createElement('canvas');
+        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        done(c.toDataURL('image/jpeg', 0.72));
+      };
+      img.onerror = function(){ URL.revokeObjectURL(url); };
+      img.src = url;
+    } catch(err){}
+  }
   document.addEventListener('change', function(e){
     if (e.target.id === 'photoIn'){
       var files = Array.prototype.slice.call(e.target.files || []);
       if (!view.draft.photos) view.draft.photos = [];
       files.slice(0, 5 - view.draft.photos.length).forEach(function(f){
-        try { view.draft.photos.push(URL.createObjectURL(f)) } catch(err){}
+        shrinkPhoto(f, function(u){ view.draft.photos.push(u); render(); });
       });
-      render();
       return;
     }
     if (e.target.id === 'avIn'){
       var af = (e.target.files || [])[0];
-      if (af){ try {
-        var u = URL.createObjectURL(af);
+      if (af) shrinkPhoto(af, function(u){
         if (view.screen === 's.reg') view.draft.avatar = u;
         else { seller(db.me.sellerId).avatar = u; toast('Photo saved'); }
-      } catch(err){} }
-      render();
+        render();
+      });
       return;
     }
     /* a list's own filters: the shop picker, the sort, the search box */
@@ -9204,7 +9518,7 @@
   applyTheme();
   try { var keepRole = sessionStorage.getItem('sc_role');
     if (keepRole && HOME[keepRole]){ sessionStorage.removeItem('sc_role'); db.me.role = keepRole; view.screen = HOME[keepRole]; } } catch(err){}
-  render();
+  syncBoot();
 })();
 </script>
 
