@@ -1595,7 +1595,46 @@
 
   /* ============================== state ============================== */
   var view = { screen:'r.requests', p:{}, draft:{}, toast:null, confirm:null, open:null };
-  function go(screen, p){ view.screen = screen; view.p = p||{}; view.draft = {}; view.confirm = null; view.why = null; view.whyFor = null; view.whyOpen = null; view.codeErr = null; view.open = null; window.scrollTo(0,0); render(true); }
+  /* ---- back goes where you came from ----------------------------------
+     Every screen's back link used to name a fixed parent, so a page opened
+     from somewhere else sent the person to a place they had never been.
+     Now each move records the page it left (with its heading, for the
+     link's label), and a back link returns there. A section of the tab bar
+     starts the trail afresh; the steps of a flow are not recorded, so back
+     from what a flow led to never re-opens a finished form. Back links inside
+     a flow (step to step) keep their own targets. */
+  var TRAIL = [];
+  function isRoot(screen){
+    return Object.keys(TABS).some(function(r){ return TABS[r].some(function(t){ return t[0] === screen }) });
+  }
+  function sameP(a, b){ return JSON.stringify(a || {}) === JSON.stringify(b || {}) }
+  function trailMove(screen, p){
+    var top = TRAIL[TRAIL.length - 1];
+    if (isRoot(screen)){ TRAIL = []; return; }
+    if (top && top.screen === screen && sameP(top.p, p)){ TRAIL.pop(); return; }
+    if (view.screen && view.screen !== screen && FLOW.indexOf(view.screen) < 0){
+      var h = document.querySelector('#app h1');
+      TRAIL.push({ screen: view.screen, p: JSON.parse(JSON.stringify(view.p || {})), title: h ? h.textContent.trim() : '' });
+      if (TRAIL.length > 40) TRAIL.shift();
+    }
+  }
+  function goBack(){
+    var t = TRAIL.pop(); if (!t) return;
+    view.screen = t.screen; view.p = t.p; view.draft = {}; view.confirm = null; view.why = null; view.whyFor = null;
+    view.whyOpen = null; view.codeErr = null; view.open = null; window.scrollTo(0,0); render(true);
+  }
+  /* after each render: the page's back link points at the trail, labelled
+     with the heading of the page it returns to */
+  function wireBack(){
+    var top = TRAIL[TRAIL.length - 1];
+    var b = document.querySelector('#app .back[data-go]');
+    if (!b || !top || top.screen === view.screen && sameP(top.p, view.p)) return;
+    var t = top.title.length > 34 ? top.title.slice(0, 33).replace(/\s+\S*$/, '') + '\u2026' : top.title;
+    b.removeAttribute('data-go'); b.removeAttribute('data-p');
+    b.setAttribute('data-act', 'goback');
+    if (t) b.textContent = '\u2190 ' + t;
+  }
+  function go(screen, p){ trailMove(screen, p || {}); view.screen = screen; view.p = p||{}; view.draft = {}; view.confirm = null; view.why = null; view.whyFor = null; view.whyOpen = null; view.codeErr = null; view.open = null; window.scrollTo(0,0); render(true); }
   /* One line per correction: who, when, what moved from what to what, and the
      reason \u2014 which is the only part of it a rule could never have supplied,
      and so the only part that is never optional. */
@@ -4062,7 +4101,15 @@
         (sb.delivery==='pickup' ? '<p class="hint" style="margin-top:8px">The buyer then gets your address, hours and a four-digit code.</p>' : '');
     }
     if (sb.status==='ready')
-      h += '<div class="note" style="margin-bottom:12px"><b>A courier is coming for it.</b> Keep it wrapped by the counter.</div>';
+      h += '<div class="note" style="margin-bottom:12px"><b>A courier is coming for it.</b> Keep it wrapped by the counter.</div>'+
+        /* paid at the counter: the code is the shop's, so a courier cannot
+           mark it paid without the shop saying it has the money */
+        (sb.payMode === 'onpickup'
+          ? '<div class="codebox" style="margin:0 0 14px"><div class="grow"><p class="eyebrow" style="margin-bottom:4px">'+
+              'When the courier pays you '+money(sb.books)+', give them this code</p>'+
+              '<span class="code">'+esc(payCodeFor(sb))+'</span></div>'+
+              '<p class="small" style="margin:0;flex:1;min-width:170px;color:var(--foreground)">They type it to record the book as collected and paid. Count the money first.</p></div>'
+          : '');
 
     /* who it goes to: on a delivery, nobody the shop needs to know */
     h += sb.delivery==='courier'
@@ -4418,21 +4465,18 @@
   }
   /* Every day of the period gets its column and its date underneath, the
      days still to come included, so the period reads as a month and not as
-     "however far we have got". In a long stretch (all periods together) the
-     columns keep a thumb's width and the chart scrolls sideways inside its
-     own box; the page itself never scrolls sideways. A column with an action
-     picks that day; the list under the chart follows it, and the same column
-     again lets go. */
+     "however far we have got". Columns keep a thumb's width: as many as the
+     screen holds are shown, and the rest are a sideways scroll inside the
+     chart's own box (the page itself never scrolls sideways). It opens on
+     today, or on the picked day. A column with an action picks that day;
+     the list under the chart follows it, and the same column again lets go. */
   function dayChart(rows, id, opt){
     opt = opt || {};
     var app = document.getElementById('app');
     var avail = Math.round(Math.max(300, Math.min(900, (app && app.clientWidth ? app.clientWidth : 390) - 32)));
     var n = Math.max(rows.length, 1);
-    var slot = opt.scroll ? Math.max(26, avail / n) : avail / n;
-    /* too narrow for every date on one line: they take two staggered lines,
-       so each still sits under its own column at a legible size */
-    var two = slot < 20;
-    var W = Math.round(slot * n), H = two ? 222 : 210, B = two ? 46 : 34, T = 20, ph = H - B - T;
+    var slot = Math.max(28, avail / n);
+    var W = Math.round(slot * n), H = 210, B = 34, T = 20, ph = H - B - T;
     var bw = Math.min(30, Math.max(4, slot * 0.7));
     var mx = Math.max.apply(null, rows.map(function(r){ return r.books }).concat([1]));
     var sel = opt.sel || null, today = dayKey(now);
@@ -4450,12 +4494,15 @@
         '<rect class="hit" x="'+(i * slot)+'" y="0" width="'+slot+'" height="'+H+'"/>'+
         '<path class="'+(v ? 'b' : 'stub')+'" d="'+d+'"/>'+
         (i === on && v ? '<text class="val" x="'+(x + bw / 2)+'" y="'+(y - 6)+'" text-anchor="middle">'+compact(v)+'</text>' : '')+
-        '<text class="dnum'+(r.key === today ? ' today' : '')+'" x="'+(x + bw / 2)+'" y="'+(two && i % 2 ? H - 18 : two ? H - 31 : H - 18)+'" text-anchor="middle">'+dd.getDate()+'</text>'+
+        '<text class="dnum'+(r.key === today ? ' today' : '')+'" x="'+(x + bw / 2)+'" y="'+(H - 18)+'" text-anchor="middle">'+dd.getDate()+'</text>'+
         ((i === 0 || dd.getDate() === 1) ? '<text x="'+(i * slot + 1)+'" y="'+(H - 3)+'">'+esc(MONTHS[dd.getMonth()])+'</text>' : '')+'</g>';
     });
-    return '<div class="chart bare'+(opt.scroll ? ' scroll' : '')+'" data-readout="rd_'+id+'" data-cid="'+id+'">'+
+    /* where the chart opens: today (or the picked day) with a little after it in view */
+    var ti = rows.map(function(r){ return r.key }).indexOf(sel || today);
+    var focus = Math.round((ti < 0 ? n : ti + 2) * slot);
+    return '<div class="chart bare scroll" data-readout="rd_'+id+'" data-cid="'+id+'" data-focus="'+focus+'">'+
       '<p class="readout" id="rd_'+id+'">'+esc(opt.head || dayTip(rows[on] || rows[0]))+'</p>'+
-      '<div class="cwrap"><svg viewBox="0 0 '+W+' '+H+'"'+(opt.scroll ? ' style="width:'+W+'px;height:'+H+'px"' : '')+' role="img" aria-label="'+esc('Orders per day, '+n+' days')+'">'+bars+'</svg></div></div>';
+      '<div class="cwrap"><svg viewBox="0 0 '+W+' '+H+'" style="width:'+W+'px;height:'+H+'px" role="img" aria-label="'+esc('Orders per day, '+n+' days')+'">'+bars+'</svg></div></div>';
   }
   function earnList(list, sel, pgKey){
     var tot = sum(list, function(x){ return x.sb.books });
@@ -4487,8 +4534,11 @@
       '<p style="margin:2px 0 0;font-size:28px;line-height:34px;font-weight:600;font-variant-numeric:tabular-nums">'+money(tot)+'</p>'+
       '<p class="small muted" style="margin:0">'+list.length+' order'+(list.length===1?'':'s')+
         (coming ? ' · '+money(tot - coming)+' in your till · '+money(coming)+' still coming' : list.length ? ' · all in your till' : '')+'</p>'+
-      dayChart(periodDays(per, list), 'per')+
-      '<p class="hint" style="margin:0">Each column is the day the reader ordered, paid or not. Tap one for its numbers.</p>'+
+      /* the same dashboard as History: tap a day for its orders, tap it again for all of them */
+      dayChart(periodDays(per, list), 'per', { act: 'selday', sel: view.p.sel || null,
+        head: view.p.sel ? null : tr('Tap a day to see its orders') })+
+      '<p class="hint" style="margin:0">Each column is the day the reader ordered, paid or not.</p>'+
+      (list.length ? earnList(view.p.sel ? list.filter(function(x){ return dayKey(orderedAt(x.sb)) === view.p.sel }) : list, view.p.sel || null, 'np') : '')+
       '</div>';
   }
   /* the periods, newest first, with "all of them together" on top */
@@ -4532,8 +4582,8 @@
       return '<button class="back" data-go="s.billing">← Billing</button>'+
         '<h1>'+esc(tr('All periods together'))+'</h1>'+
         '<p class="sub">'+trade.length+' order'+(trade.length===1?'':'s')+' · '+money(totA)+' for books'+(trade.length ? ', since '+esc(dstrY(firstAt)) : '')+'</p>'+
-        dayChart(allRows, 'all', { scroll: true, act: 'selday', sel: sel,
-          head: sel ? null : esc(tr('Tap a day to see its orders')) })+
+        dayChart(allRows, 'all', { act: 'selday', sel: sel,
+          head: sel ? null : tr('Tap a day to see its orders') })+
         earnList(picked, sel, 'na')+
         '<h2 style="margin:22px 0 8px">Periods</h2>'+periodList(trade, false);
     }
@@ -4549,7 +4599,7 @@
         '<h1>'+esc(per.label)+'</h1>'+
         '<p class="sub">'+list.length+' order'+(list.length===1?'':'s')+' · '+money(tot)+' for books'+
           (coming ? ' · '+money(coming)+' still coming' : '')+'</p>'+
-        dayChart(periodDays(per, list), 'mon', { act: 'selday', sel: sel, head: sel ? null : esc(tr('Tap a day to see its orders')) })+
+        dayChart(periodDays(per, list), 'mon', { act: 'selday', sel: sel, head: sel ? null : tr('Tap a day to see its orders') })+
         (list.length ? earnList(pickedP, sel, 'np') : emptyBox('No orders in this period', 'Orders show up here on the day the reader places them.'));
     }
     var dg = days.filter(function(g){ return g.key === day })[0] || { rows:[], books:0 };
@@ -4793,6 +4843,8 @@
     return db.settles.filter(function(x){ return x.subs.indexOf(subNo) >= 0 })
       .sort(function(a, b){ return b.at - a.at })[0] || null;
   }
+  /* the shop's code for a courier paying at the counter, made once */
+  function payCodeFor(sb){ if (!sb.payCode) sb.payCode = fourDigits(); return sb.payCode }
   function fourDigits(){ return String(Math.floor(1000 + Math.random() * 9000)) }
 
   function shopPaidFor(subNo){
@@ -4893,7 +4945,13 @@
 
     h += '<div class="btns" style="margin-top:'+(full?'14px':'10px')+';flex-direction:row;flex-wrap:wrap;gap:8px">'+
       (toCollect
-        ? '<button class="btn sm" data-act="ccollect:'+o.id+':'+sb.no+'">'+(onPickup ? 'Collected \u00b7 paid '+money(sb.books) : 'Collected from the shop')+'</button>'
+        ? (onPickup
+            ? '<div style="width:100%"><p class="small" style="margin:0 0 6px;color:var(--foreground)">Pay the shop '+money(sb.books)+' and ask for the four-digit code on their order screen.</p>'+
+                (view.codeErr === 'pc_'+sb.no ? '<p class="small bad-t" style="margin:0 0 6px">That is not the shop\u2019s code. Ask them to read it again.</p>' : '')+
+                '<div class="wrap-row"><input class="in'+(view.codeErr === 'pc_'+sb.no ? ' bad' : '')+'" id="pc_'+esc(sb.no)+'" inputmode="numeric" maxlength="4" placeholder="0000" data-ph-plain '+
+                  'style="width:96px;text-align:center;letter-spacing:.2em" aria-label="Code from the shop">'+
+                '<button class="btn sm" data-act="ccollect:'+o.id+':'+sb.no+'">Collected \u00b7 paid '+money(sb.books)+'</button></div></div>'
+            : '<button class="btn sm" data-act="ccollect:'+o.id+':'+sb.no+'">Collected from the shop</button>')
         : '')+
       /* the other way to pay sits beside Collected, not on a row of its own */
       (toCollect ? '<button class="btn ghost sm" data-act="cmode:'+o.id+':'+sb.no+'">'+
@@ -7010,6 +7068,8 @@
       "Add location":"Добавить точку",
       "Add photo":"Добавить фото",
       "Add to cart":"В корзину",
+      "Each column is the day the reader ordered, paid or not.":"Каждый столбик — день, когда читатель сделал заказ, оплачен он или нет.",
+      "They type it to record the book as collected and paid. Count the money first.":"Курьер вводит его, чтобы отметить, что книга забрана и оплачена. Сначала пересчитайте деньги.",
       "Tap a day to see its orders":"Нажмите на день, чтобы увидеть его заказы",
       "All orders":"Все заказы",
       "Tap the same day again to see every order.":"Нажмите на тот же день ещё раз, чтобы увидеть все заказы.",
@@ -7704,6 +7764,8 @@
       ["^(\\d+) handovers?$","Передач: $1"],
       ["^(\\d+) handovers? from (\\d+) shops$","Передач: $1, из $2 магазинов"],
       ["^Start checking · (\\d+)$","Начать проверку · $1"],
+      ["^When the courier pays you (.+), give them this code$","Когда курьер заплатит вам $1, назовите ему этот код"],
+      ["^Pay the shop (.+) and ask for the four-digit code on their order screen\\.$","Заплатите магазину $1 и попросите четырёхзначный код с экрана заказа."],
       ["^Commission this period · since (.+)$","Комиссия за период · с $1"],
       ["^This period · (.+?)( · free month)?$","Этот период · $1$2"],
       ["^([▸▾] )Books you have already offered \\((\\d+)\\)$","$1Книги, которые вы уже предложили ($2)"],
@@ -8904,11 +8966,12 @@
         view.p.rv = null; view.draft.rp_text = '';
         toast('Posted \u2014 readers see it under the review'); render(); break;
       }
+      case 'goback': goBack(); break;
       case 'selday': { view.p.sel = view.p.sel === a ? null : a; delete view.p.na; delete view.p.np; render(); break; }
       case 'earn': { go('s.earn', { mon: a, day: b || null }); break; }
       case 'bmon': { view.p = a ? { tab:view.p.tab, mon:a } : { tab:view.p.tab }; window.scrollTo(0,0); render(); break; }
       case 'bday': { view.p = { tab:view.p.tab, mon:view.p.mon, day:a || null }; window.scrollTo(0,0); render(); break; }
-      case 'back': history.length>1 ? go(db.me.role==='reader'?'r.requests':'s.feed') : render(); break;
+      case 'back': if (TRAIL.length) goBack(); else go(db.me.role==='reader'?'r.requests':'s.feed'); break;
 
       case 'reurgent': {
         var rr = req(a); if (!rr) return;
@@ -9313,10 +9376,15 @@
       case 'ccollect': {
         var oc1 = db.orders.filter(function(x){ return String(x.id)===String(a) })[0];
         var sc1 = oc1.subs.filter(function(x){ return x.no===b })[0];
+        if (sc1.payMode === 'onpickup'){
+          var pcf = document.getElementById('pc_' + sc1.no), pct = pcf ? pcf.value.trim() : '';
+          if (!sc1.payCode || pct !== sc1.payCode){ view.codeErr = 'pc_' + sc1.no; render(); return; }
+          view.codeErr = null;
+        }
         sc1.status='shipped'; sc1.courier = db.me.courierId; sc1.shippedAt = Date.now();
         if (sc1.payMode === 'onpickup'){
           sc1.paidShop = true; sc1.settled = true;
-          ledgerAdd(sc1.books, 'courier', 'shop', sc1.no, 'paid at pickup');
+          ledgerAdd(sc1.books, 'courier', 'shop', sc1.no, 'paid at pickup, shop\u2019s code');
         }
         toast(sc1.payMode === 'onpickup' ? 'Collected \u2014 shop paid ' + money(sc1.books) : 'Collected \u2014 the buyer has been told it is on the way');
         render(); break;
@@ -9424,6 +9492,7 @@
         var oc4 = db.orders.filter(function(x){ return String(x.id)===String(a) })[0];
         var sc4 = oc4.subs.filter(function(x){ return x.no===b })[0];
         sc4.payMode = sc4.payMode === 'onpickup' ? 'after' : 'onpickup';
+        if (sc4.payMode === 'onpickup') payCodeFor(sc4);
         toast(sc4.payMode === 'onpickup' ? 'You will pay the shop at pickup' : 'You will settle with the shop later');
         render(); break;
       }
@@ -9555,6 +9624,7 @@
         sb4.status = sb4.delivery==='courier' ? 'ready' : 'shipped';
         sb4.readyAt = Date.now();
         sb4.askSameCopy = true;
+        if (sb4.delivery === 'courier') payCodeFor(sb4);
         toast(sb4.delivery==='courier'
           ? 'Marked ready \u2014 a courier is on the way for it'
           : 'Marked ready \u2014 the buyer has your address and their code');
@@ -10153,11 +10223,12 @@
     [].forEach.call(app.querySelectorAll('.chart.scroll'), function(c){
       var w = c.querySelector('.cwrap'); if (!w) return;
       var k = c.getAttribute('data-cid');
-      w.scrollLeft = keepX[k] !== undefined ? keepX[k] : w.scrollWidth;
+      w.scrollLeft = keepX[k] !== undefined ? keepX[k] : Math.max(0, +c.getAttribute('data-focus') - w.clientWidth);
     });
     app.classList.toggle('bottom-act', !!app.querySelector('.page-tail'));
     i18n();
     markExamples();
+    wireBack();
     renderDock();
     wireDeck();
     if (moved){
