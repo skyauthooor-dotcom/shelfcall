@@ -25,6 +25,13 @@ def free_port():
 class Run:
     def __init__(self, base, browser):
         self.base, self.browser, self.pages = base, browser, []
+        self.space = 'main'
+
+    def own_world(self):
+        """A world of this flow's own, seeded fresh, for flows that use the sample
+        data and would otherwise depend on what earlier flows did to main."""
+        self.space = 'flow%d' % random.randint(100000, 999999)
+        return '?world=' + self.space
 
     async def phone(self, path, w=390, h=844):
         ctx = await self.browser.new_context(viewport={'width': w, 'height': h})
@@ -37,8 +44,11 @@ class Run:
         self.pages.append(pg)
         return pg
 
-    def world(self, space='main'):
-        with urllib.request.urlopen('%s/api/world?space=%s&v=-1' % (self.base, space)) as r:
+    def _settle(self, sid):
+        return next(x for x in self.world()['settles'] if x['id'] == sid)
+
+    def world(self, space=None):
+        with urllib.request.urlopen('%s/api/world?space=%s&v=-1' % (self.base, space or self.space)) as r:
             return json.load(r)['world']
 
     async def until(self, fn, secs=10, msg='timed out'):
@@ -60,7 +70,7 @@ class Run:
 
     @staticmethod
     async def acts(pg):
-        return await pg.evaluate('''() => [...document.querySelectorAll('main [data-act], main [data-ask], #sheet [data-act]')]
+        return await pg.evaluate('''() => [...document.querySelectorAll('main [data-act], main [data-ask], #dock [data-act], #dock [data-ask], #sheet [data-act]')]
             .map(e => e.getAttribute('data-act') || 'ask:' + e.getAttribute('data-ask'))''')
 
     async def press(self, pg, prefix, required=True):
@@ -89,7 +99,7 @@ class Run:
 
     @staticmethod
     async def text(pg):
-        return await pg.inner_text('main')
+        return await pg.inner_text('main') + '\n' + await pg.inner_text('#dock')
 
     # ---- the steps every flow reuses ---------------------------------------
     async def reader_asks(self, reader, title):
@@ -97,7 +107,7 @@ class Run:
         await self.press(reader, 'kind:concrete')
         await reader.fill('#f_title', title)
         await reader.locator('#f_title').blur()
-        await reader.locator('main .btn').last.click(); await reader.wait_for_timeout(250)
+        await reader.locator('main .btn, #dock .btn').last.click(); await reader.wait_for_timeout(250)
         await self.press(reader, 'publish')
         return await self.until(lambda: next((r['id'] for r in self.world()['requests'] if r.get('title') == title), None),
                                 8, 'the request never reached the server')
@@ -125,7 +135,7 @@ class Run:
             if 'loc:mash' in acts: await self.press(shop, 'loc:mash')
             if any(a.startswith('toreview') for a in acts):
                 await self.press(shop, 'toreview'); continue
-            nxt = await shop.evaluate('''() => { const b = [...document.querySelectorAll('main button.btn[data-act^="step:"]')]
+            nxt = await shop.evaluate('''() => { const b = [...document.querySelectorAll('main button.btn[data-act^="step:"], #dock button.btn[data-act^="step:"]')]
                 .filter(b => !/ghost|link|back/.test(b.className)); return b.length ? b[b.length - 1].getAttribute('data-act') : null }''')
             if not nxt and not photo:
                 nxt = 'step:1'
@@ -483,12 +493,123 @@ async def a_shop_tab_left_in_the_background_still_gets_the_request(t):
     await t.until(lambda: _contains(shop, title), 5, 'the hidden shop tab received it but did not show it')
 
 
+@flow
+async def courier_pays_the_shop_and_both_screens_change(t):
+    w = t.own_world()
+    courier = await t.phone('/courier' + w); shop = await t.phone('/seller' + w)
+    await t.go(shop, 's.feed')
+    await t.go(courier, 'c.done')
+    await t.press(courier, 'csettlestart:aram')
+    st = await t.until(lambda: next((x for x in t.world().get('settles', []) if x['seller'] == 'aram' and x['state'] == 'open'), None),
+                       8, 'the handover never reached the server')
+    # the shop, on another screen, is told: a badge on Billing and a notification
+    await t.until(lambda: shop.evaluate('() => !!document.querySelector(\'#tabbar [data-go="s.billing"] .count\')'), 10,
+                  'the shop tab bar never showed the handover')
+    await t.go(shop, 's.billing')
+    await t.until(lambda: _contains(shop, 'is handing you'), 10, 'the shop billing page never showed the handover')
+    wrong = '1111' if st['code'] != '1111' else '2222'
+    await shop.fill('#cash_code', wrong)
+    await t.press(shop, 'cashok:' + st['id'])
+    assert await _contains(shop, 'not the code'), 'a wrong code was accepted'
+    assert t._settle(st['id'])['state'] == 'open'
+    await shop.fill('#cash_code', st['code'])
+    await t.press(shop, 'cashok:' + st['id'])
+    await t.until(lambda: t._settle(st['id'])['state'] == 'done', 8, 'the confirmed handover did not reach the server')
+    led = [l for l in t.world()['ledger'] if l.get('from') == 'courier' and l.get('to') == 'shop' and l.get('sub') in st['subs']]
+    assert sum(l['amount'] for l in led) == st['amount'], (led, st)
+    # the courier's screen, untouched, drops the code and shows the shop settled
+    await t.until(lambda: _not_contains(courier, st['code']), 10, 'the courier still shows the code after the shop confirmed')
+    await t.until(lambda: courier.evaluate('() => !document.querySelector(\'[data-act="csettlestart:aram"]\')'), 5,
+                  'the courier is offered to hand over the same money again')
+
+
+@flow
+async def a_handover_where_the_counts_differ_records_no_money(t):
+    w = t.own_world()
+    courier = await t.phone('/courier' + w); shop = await t.phone('/seller' + w)
+    await t.go(shop, 's.billing')
+    before = len(t.world()['ledger'])
+    await t.go(courier, 'c.done')
+    await t.press(courier, 'csettlestart:aram')
+    st = await t.until(lambda: next((x for x in t.world().get('settles', []) if x['seller'] == 'aram' and x['state'] == 'open'), None), 8)
+    await t.until(lambda: _contains(shop, 'is handing you'), 10, 'the open billing page never showed the handover')
+    await shop.fill('#cash_got', str(st['amount'] - 1000))
+    await t.press(shop, 'cashodd:' + st['id'])
+    await t.until(lambda: t._settle(st['id'])['state'] == 'mismatch', 8, 'the disagreement did not reach the server')
+    assert len(t.world()['ledger']) == before, 'money was recorded for a disputed handover'
+    await t.until(lambda: _not_contains(courier, st['code']), 10, 'the courier still shows the code')
+    await t.until(lambda: _contains(courier, 'The office has both numbers'), 10, 'the courier was not told the counts differ')
+    # and a cancelled one, from the courier's side, disappears from the shop
+    await t.press(courier, 'csettlestart:aram')
+    st2 = await t.until(lambda: next((x for x in t.world().get('settles', []) if x['seller'] == 'aram' and x['state'] == 'open'), None), 8)
+    await t.until(lambda: _contains(shop, 'is handing you'), 10)
+    await t.press(courier, 'csettlestop:' + st2['id'])
+    await t.until(lambda: _not_contains(shop, 'is handing you'), 10, 'a cancelled handover stayed on the shop page')
+
+
+@flow
+async def the_main_button_stays_at_the_bottom_of_the_phone(t):
+    w = t.own_world()
+    reader = await t.phone('/reader' + w, h=844)
+    async def dock(pg):
+        return await pg.evaluate("""() => { const d = document.getElementById('dock'), b = d.querySelector('.btn'),
+            tb = document.getElementById('tabbar'); if (!b || !d.classList.contains('on')) return null;
+            const r = b.getBoundingClientRect(), tr = tb && getComputedStyle(tb).display !== 'none' && !tb.hidden ? tb.getBoundingClientRect() : null;
+            return { text: b.innerText, bottom: Math.round(r.bottom), top: Math.round(r.top), tab: tr ? Math.round(tr.top) : null, vh: innerHeight }; }""")
+    await t.go(reader, 'r.requests')
+    a = await dock(reader)
+    assert a and a['text'] == 'Ask for a book', a
+    assert a['tab'] and a['bottom'] <= a['tab'] and a['tab'] - a['bottom'] < 24, ('not just above the tab bar', a)
+    await reader.mouse.wheel(0, 800); await reader.wait_for_timeout(200)
+    assert (await dock(reader))['top'] == a['top'], 'the button moved when the page scrolled'
+    # a flow screen has no tab bar: the button sits at the bottom edge
+    await t.go(reader, 'r.request', 'r2')
+    await t.press(reader, 'add:')
+    await t.go(reader, 'r.cart'); await t.press(reader, 'checkout')
+    c = await dock(reader)
+    assert c and c['tab'] is None and c['vh'] - c['bottom'] < 24, c
+    # a tall phone: same place relative to the bottom, not halfway up
+    tall = await t.phone('/reader' + w, h=1100)
+    await t.go(tall, 'r.requests')
+    b = await dock(tall)
+    assert b['vh'] - b['bottom'] == a['vh'] - a['bottom'], (a, b)
+    # nothing hides under the dock: the end of the page scrolls clear of it
+    await tall.evaluate('() => window.scrollTo(0, document.body.scrollHeight)'); await tall.wait_for_timeout(150)
+    last = await tall.evaluate("() => Math.round(document.querySelector('main').lastElementChild.getBoundingClientRect().bottom)")
+    assert last <= b['top'], ('content ends under the button', last, b)
+
+
+@flow
+async def offer_card_opens_the_book_and_buy_goes_to_checkout(t):
+    reader = await t.phone('/reader' + t.own_world())
+    await t.go(reader, 'r.request', 'r2')
+    acts = await t.acts(reader)
+    buy = next(a for a in acts if a.startswith('buy:'))
+    oid = buy.split(':')[1]
+    assert await reader.evaluate("(o) => document.querySelector('[data-act=\"buy:' + o + '\"]').innerText.trim()", oid) == 'Buy'
+    await reader.evaluate("() => document.querySelector('.row.tap .grow, .row.tap h3, .row.tap').click()")
+    await reader.wait_for_timeout(250)
+    assert await reader.evaluate('() => SC_DEBUG.screen()') == 'r.offer', 'tapping the card did not open the book'
+    await t.go(reader, 'r.request', 'r2')
+    await t.press(reader, 'buy:' + oid)
+    scr = await reader.evaluate('() => SC_DEBUG.screen()')
+    assert scr != 'r.request' and scr != 'r.offer', 'Buy did not move on to checkout: ' + scr
+
+
+@flow
+async def the_reader_sees_their_own_phone_when_editing(t):
+    reader = await t.phone('/reader' + t.own_world())
+    await t.go(reader, 'x.settings')
+    v = await reader.input_value('#p_phone')
+    assert v and '*' not in v and sum(ch.isdigit() for ch in v) >= 11, v
+
+
 async def _contains(pg, s):
-    return s in await pg.inner_text('main')
+    return s in await Run.text(pg)
 
 
 async def _not_contains(pg, s):
-    return s not in await pg.inner_text('main')
+    return s not in await Run.text(pg)
 
 
 # ================================ runner =====================================
