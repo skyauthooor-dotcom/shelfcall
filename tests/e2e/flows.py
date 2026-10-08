@@ -81,7 +81,8 @@ class Run:
             const el = [...document.querySelectorAll('[data-act], [data-ask]')].find(e =>
               (e.getAttribute('data-act') || '').startsWith(pre) || (e.getAttribute('data-ask') || '').startsWith(pre));
             if (!el) return null;
-            el.click(); return el.getAttribute('data-act') ? 'act' : 'ask'; }''', prefix)
+            if (el.click) el.click(); else el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            return el.getAttribute('data-act') ? 'act' : 'ask'; }''', prefix)
         if not found:
             if required: raise AssertionError('no "%s" button; on screen: %s' % (prefix, await self.acts(pg)))
             return False
@@ -724,8 +725,24 @@ async def billing_counts_every_order_on_the_day_it_was_placed(t):
     assert await shop.evaluate("() => !document.querySelector('.chart.bare .grid')"), 'the chart has grid lines'
     # the headline is every order of this period, paid or not, by order day
     assert await _contains(shop, 'still coming') or await _contains(shop, 'all in your till')
+    # every day of the period has its column and its date
+    n_days, n_labels = await shop.evaluate("""() => [document.querySelectorAll('.chart.bare .bar').length,
+        document.querySelectorAll('.chart.bare text.dnum').length]""")
+    assert n_days >= 28 and n_labels == n_days, (n_days, n_labels)
     await t.press(shop, 'earn:all')
     assert await _contains(shop, 'All periods together')
+    # all of time scrolls sideways inside the chart, never the page
+    assert await shop.evaluate("() => { const w = document.querySelector('.chart.scroll .cwrap'); return w.scrollWidth > w.clientWidth }")
+    assert await shop.evaluate("() => document.documentElement.scrollWidth <= innerWidth")
+    total = await shop.evaluate("() => document.querySelectorAll('main .rowlist')[0].querySelectorAll('[data-go=\"s.order\"]').length")
+    day = await shop.evaluate("""() => { const g = [...document.querySelectorAll('.chart.scroll .bar')].filter(g => g.querySelector('.b'));
+        return g[g.length - 1].getAttribute('data-act') }""")
+    await t.press(shop, day)
+    one = await shop.evaluate("() => document.querySelectorAll('main .rowlist')[0].querySelectorAll('[data-go=\"s.order\"]').length")
+    assert 0 < one < total or total == one == 1, ('a picked day did not narrow the list', one, total)
+    await t.press(shop, day)
+    again = await shop.evaluate("() => document.querySelectorAll('main .rowlist')[0].querySelectorAll('[data-go=\"s.order\"]').length")
+    assert again == total, 'the same day again did not bring every order back'
     assert not await shop.evaluate("() => [...document.querySelectorAll('#tabbar [data-go]')].some(b => b.getAttribute('data-go') === 's.stats')"), 'Results is still in the tab bar'
 
 
