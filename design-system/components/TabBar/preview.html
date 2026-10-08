@@ -1,0 +1,36 @@
+<!-- @dsCard group="Navigation" height=220 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+  body{margin:0;padding:20px;font-family:var(--font-sans);background:var(--background);color:var(--foreground)}
+  .phone{width:320px;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+  .phone .body{padding:14px 16px 10px;color:var(--muted-foreground);font-size:12.5px}
+  /* the tab bar is fixed in the app; here it is shown in place */
+  .bar{border-top:1px solid var(--border);background:var(--background)}
+  .bar nav{display:flex}
+  .bar button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    min-height:56px;padding:8px 2px 7px;font-size:11px;line-height:14px;color:var(--muted-foreground);
+    background:none;border:0;position:relative}
+  .bar button svg{width:21px;height:21px;stroke-width:1.6}
+  .bar button[aria-current="true"]{color:var(--foreground);font-weight:600}
+  .bar button[aria-current="true"] svg{stroke-width:2.1}
+  .badge{position:absolute;top:5px;left:50%;margin-left:5px;min-width:16px;height:16px;padding:0 4px;
+    border-radius:999px;background:var(--primary);color:var(--primary-foreground);
+    font-size:10px;line-height:16px;font-weight:600;text-align:center}
+</style>
+<div class="phone">
+  <div class="body">Your requests</div>
+  <div class="bar"><nav>
+    <button aria-current="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span>Requests</span><span class="badge">2</span>
+    </button>
+    <button>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+      <span>Orders</span>
+    </button>
+    <button>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+      <span>Cart</span>
+    </button>
+  </nav></div>
+</div>

@@ -1,0 +1,33 @@
+<!-- @dsCard group="Overlays" height=430 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+  body{margin:0;padding:0;font-family:var(--font-sans);background:var(--background);color:var(--foreground)}
+  .phone{position:relative;height:430px;overflow:hidden;background:var(--background)}
+  .behind{padding:20px;filter:blur(1px);opacity:.45}
+  .behind h1{font-size:22px;letter-spacing:-.02em;margin:0 0 4px}
+  .behind p{color:var(--muted-foreground);margin:0 0 16px;font-size:14px;line-height:20px}
+  .fake-card{border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px}
+  /* the real component uses <dialog>; the preview pins it so the card can
+     show it open without a script */
+  .sheet{position:absolute;inset:auto 0 0 0}
+</style>
+
+<div class="phone">
+  <div class="behind">
+    <h1>The Pillow Book</h1>
+    <p>open 2 days · no offers yet</p>
+    <div class="fake-card">Specific · up to 12 000 ֏</div>
+  </div>
+
+  <div class="sheet" data-slot="sheet" open>
+    <div data-slot="sheet-content">
+      <div data-slot="sheet-grip" aria-hidden="true"></div>
+      <h2 data-slot="sheet-title">Close this request?</h2>
+      <p data-slot="sheet-body">The shops stop seeing it, and any offers on it are set aside. Nothing is deleted — you keep the record, and you can post it again any time.</p>
+      <div data-slot="sheet-actions">
+        <button data-slot="button" data-variant="destructive" type="button">Yes, close it</button>
+        <button data-slot="button" data-variant="outline" type="button">Keep it</button>
+      </div>
+    </div>
+  </div>
+</div>

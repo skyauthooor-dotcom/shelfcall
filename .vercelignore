@@ -1,0 +1,12 @@
+# Vercel only needs public/. Everything else is source and tooling, and
+# keeping the Python scripts out of the upload stops Vercel from guessing
+# that this is a Python app.
+/build
+/i18n
+/prototype
+/design-system
+/docs
+/out
+*.py
+README.md
+push.bat

@@ -1,0 +1,24 @@
+<!-- @dsCard group="Surfaces" height=300 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+  body{margin:0;padding:20px;font-family:var(--font-sans);background:var(--background);color:var(--foreground)}
+  .wrap{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+  .col{display:flex;flex-direction:column;gap:12px;max-width:520px}
+</style>
+<div class="col">
+  <div data-slot="card">
+    <div data-slot="card-header">
+      <h3 data-slot="card-title">Aram Books — Mashtots branch</h3>
+      <p data-slot="card-description">#1042-A · courier 1 000 ֏</p>
+      <div data-slot="card-action"><span data-slot="badge" data-variant="outline">courier</span></div>
+    </div>
+    <div data-slot="card-content">
+      <p style="margin:0;font-size:14px">Frankenstein · good used</p>
+      <p style="margin:4px 0 0;font-size:12px;color:var(--muted-foreground)">Mary Shelley · 1979</p>
+    </div>
+    <div data-slot="card-footer" style="justify-content:space-between">
+      <span style="font-size:12px;color:var(--muted-foreground)">Pay the courier</span>
+      <span style="font-weight:600;font-variant-numeric:tabular-nums">5 500 ֏</span>
+    </div>
+  </div>
+</div>

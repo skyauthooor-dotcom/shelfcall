@@ -1,0 +1,20 @@
+<!-- @dsCard group="Data entry" height=160 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+  body{margin:0;padding:20px;font-family:var(--font-sans);background:var(--background);color:var(--foreground)}
+  .wrap{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+  .col{display:flex;flex-direction:column;gap:12px;max-width:520px}
+</style>
+<div class="col">
+  <div style="display:flex;gap:16px;align-items:center;justify-content:space-between">
+    <div><p style="margin:0;font-size:14px;font-weight:500">Taking deliveries</p>
+    <p style="margin:2px 0 0;font-size:12px;color:var(--muted-foreground)">New jobs come to you</p></div>
+    <button data-slot="switch" aria-checked="true" role="switch"><span data-slot="switch-thumb"></span></button>
+  </div>
+  <hr data-slot="separator" data-orientation="horizontal">
+  <div style="display:flex;gap:16px;align-items:center;justify-content:space-between">
+    <div><p style="margin:0;font-size:14px;font-weight:500">Email</p>
+    <p style="margin:2px 0 0;font-size:12px;color:var(--muted-foreground)">Order events only — never offers</p></div>
+    <button data-slot="switch" aria-checked="false" role="switch"><span data-slot="switch-thumb"></span></button>
+  </div>
+</div>

@@ -1,0 +1,23 @@
+<!-- @dsCard group="Data entry" height=320 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+  body{margin:0;padding:20px;font-family:var(--font-sans);background:var(--background);color:var(--foreground)}
+  .wrap{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+  .col{display:flex;flex-direction:column;gap:12px;max-width:520px}
+</style>
+<div class="col">
+  <div>
+    <label data-slot="label" for="p1">Your price</label>
+    <input data-slot="input" id="p1" value="3 800" inputmode="numeric">
+    <p data-slot="field-description">The reader said up to 6 000 ֏. You can go over it — they decide.</p>
+  </div>
+  <div>
+    <label data-slot="label" for="p2">Buyer&rsquo;s four digits</label>
+    <input data-slot="input" id="p2" value="0000" aria-invalid="true" style="max-width:120px;text-align:center;letter-spacing:.2em">
+    <p data-slot="field-error">That is not the code on the buyer&rsquo;s order. Ask them to read it again.</p>
+  </div>
+  <div>
+    <label data-slot="label" for="p3">Why this book answers them</label>
+    <textarea data-slot="textarea" id="p3" placeholder="A mad-scientist novel, funny rather than grim — the narrator is the experiment. Short, 180 pages."></textarea>
+  </div>
+</div>

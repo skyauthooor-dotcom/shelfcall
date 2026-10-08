@@ -1,0 +1,38 @@
+<!-- @dsCard group="Data display" height=260 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+  body{margin:0;padding:20px;font-family:var(--font-sans);background:var(--background);color:var(--foreground)}
+  .wrap{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+  .col{display:flex;flex-direction:column;gap:12px;max-width:520px}
+</style>
+<div class="col" style="max-width:560px">
+  <div data-slot="item-group" style="border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
+    <div data-slot="item">
+      <div data-slot="item-media">
+        <div data-slot="book-cover"><p data-slot="book-cover-title">Frankenstein</p><p data-slot="book-cover-author">Mary Shelley</p></div>
+      </div>
+      <div data-slot="item-content">
+        <p data-slot="item-title">Frankenstein</p>
+        <p data-slot="item-description">Mary Shelley · 1979 · good used</p>
+        <p data-slot="item-description">Aram Books — Mashtots branch</p>
+      </div>
+      <div data-slot="item-actions">
+        <span style="font-weight:600;font-variant-numeric:tabular-nums">4 500 ֏</span>
+      </div>
+    </div>
+    <hr data-slot="item-separator">
+    <div data-slot="item">
+      <div data-slot="item-media">
+        <div data-slot="book-cover"><p data-slot="book-cover-title">Solaris</p><p data-slot="book-cover-author">Stanisław Lem</p></div>
+      </div>
+      <div data-slot="item-content">
+        <p data-slot="item-title">Solaris</p>
+        <p data-slot="item-description">Stanisław Lem · 1988 · worn</p>
+        <p data-slot="item-description">Grigor Books — Warehouse</p>
+      </div>
+      <div data-slot="item-actions">
+        <span style="font-weight:600;font-variant-numeric:tabular-nums">3 000 ֏</span>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,535 @@
+<title>Shelfcall Supply Test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap">
+<style>
+  :root{
+    --paper:#f1f4f4;
+    --surface:#ffffff;
+    --surface-2:#e7ecec;
+    --ink:#15222a;
+    --ink-2:#44585f;
+    --ink-3:#6f858c;
+    --line:#d2dadb;
+    --line-soft:#e4e9e9;
+    --reader:#2d5896;
+    --reader-soft:#e5ecf7;
+    --seller:#1a6754;
+    --seller-soft:#e1efe9;
+    --accent:#1a6754;
+    --accent-ink:#ffffff;
+    --warn:#8a5c17;
+    --warn-soft:#f5ecda;
+    --stop:#9d3a2c;
+    --stop-soft:#f7e6e2;
+    --shadow:0 1px 2px rgba(21,34,42,.06), 0 10px 24px -18px rgba(21,34,42,.35);
+    --sans:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    --serif:"Newsreader", Georgia, "Times New Roman", serif;
+    --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme: dark;
+      --paper:#0f1519; --surface:#161f24; --surface-2:#1f2930;
+      --ink:#e6eded; --ink-2:#a6babf; --ink-3:#7d959b;
+      --line:#2b383f; --line-soft:#223038;
+      --reader:#82aae9; --reader-soft:#1b2838;
+      --seller:#52bb9f; --seller-soft:#122b25;
+      --accent:#52bb9f; --accent-ink:#06221c;
+      --warn:#d9ad5e; --warn-soft:#2c2415;
+      --stop:#e08d7c; --stop-soft:#2f1c18;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 24px -18px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --paper:#0f1519; --surface:#161f24; --surface-2:#1f2930;
+    --ink:#e6eded; --ink-2:#a6babf; --ink-3:#7d959b;
+    --line:#2b383f; --line-soft:#223038;
+    --reader:#82aae9; --reader-soft:#1b2838;
+    --seller:#52bb9f; --seller-soft:#122b25;
+    --accent:#52bb9f; --accent-ink:#06221c;
+    --warn:#d9ad5e; --warn-soft:#2c2415;
+    --stop:#e08d7c; --stop-soft:#2f1c18;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 24px -18px rgba(0,0,0,.8);
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;padding-inline:20px;padding-block:0 72px}
+  a{color:inherit}
+
+  .mast{padding-block:44px 28px;border-bottom:1px solid var(--line)}
+  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin:0 0 14px}
+  h1{font-family:var(--serif);font-weight:500;font-size:clamp(32px,5.5vw,50px);line-height:1.05;letter-spacing:-.015em;margin:0 0 14px;text-wrap:balance}
+  .lede{font-family:var(--serif);font-size:clamp(17px,2.4vw,21px);line-height:1.5;color:var(--ink-2);max-width:62ch;margin:0}
+  .meta-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+
+  nav.toc{position:sticky;top:env(safe-area-inset-top, 0px);z-index:20;background:color-mix(in srgb, var(--paper) 92%, transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .toc-inner{max-width:1080px;margin:0 auto;padding-inline:20px;display:flex;gap:4px;overflow-x:auto;scrollbar-width:thin}
+  .toc a{flex:none;text-decoration:none;font-size:13px;font-weight:500;color:var(--ink-2);padding:12px 10px;border-bottom:2px solid transparent;white-space:nowrap}
+  .toc a:hover{color:var(--ink)}
+  .toc a.on{color:var(--ink);border-bottom-color:var(--accent)}
+
+  section{padding-block:44px 8px;scroll-margin-top:64px}
+  .sec-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+  .sec-num{font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+  h2{font-family:var(--serif);font-weight:500;font-size:clamp(25px,3.6vw,34px);letter-spacing:-.01em;margin:0}
+  .sec-note{color:var(--ink-2);max-width:66ch;margin:0 0 26px}
+  h3{font-size:15px;font-weight:600;margin:32px 0 12px}
+  h3:first-of-type{margin-top:0}
+  p{max-width:68ch}
+
+  .tag{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:3px;background:var(--surface-2);color:var(--ink-2)}
+  .tag.ghost{background:transparent;border:1px solid var(--line);color:var(--ink-3)}
+  .tag.go{background:var(--seller-soft);color:var(--seller)}
+  .tag.warn{background:var(--warn-soft);color:var(--warn)}
+  .tag.stop{background:var(--stop-soft);color:var(--stop)}
+  .dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+
+  /* the question block */
+  .thesis{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:22px 24px;box-shadow:var(--shadow);margin-bottom:26px}
+  .thesis .q{font-family:var(--serif);font-size:clamp(20px,3vw,26px);line-height:1.35;margin:0 0 10px;text-wrap:balance}
+  .thesis p{margin:0;color:var(--ink-2);font-size:14px}
+
+  .rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .rule{background:var(--surface);padding:16px 18px}
+  .rule b{display:block;font-size:13.5px;margin-bottom:3px}
+  .rule span{font-size:13px;color:var(--ink-2)}
+
+  /* day spine */
+  .spine{border-left:2px solid var(--line);margin-left:6px;padding-left:22px;display:flex;flex-direction:column;gap:22px}
+  .phase{position:relative}
+  .phase::before{content:"";position:absolute;left:-29px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--accent);border:2px solid var(--paper)}
+  .phase .when{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);display:block;margin-bottom:4px}
+  .phase h4{margin:0 0 6px;font-size:15.5px;font-weight:600}
+  .phase p{margin:0 0 10px;color:var(--ink-2);font-size:14px}
+  .phase ul{margin:0;padding-left:17px;font-size:13.5px;color:var(--ink-2)}
+  .phase li{margin-bottom:5px}
+  .phase li::marker{color:var(--ink-3)}
+
+  /* gate */
+  .gate{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin-top:8px}
+  .gcard{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px;box-shadow:var(--shadow)}
+  .gcard.go{border-top:3px solid var(--seller)}
+  .gcard.warn{border-top:3px solid var(--warn)}
+  .gcard.stop{border-top:3px solid var(--stop)}
+  .gcard h4{margin:8px 0 10px;font-size:14.5px}
+  .gcard ul{margin:0;padding-left:16px;font-size:13.5px;color:var(--ink-2)}
+  .gcard li{margin-bottom:6px}
+  .gcard li b{color:var(--ink);font-variant-numeric:tabular-nums}
+  .gcard .then{margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft);font-size:13px;color:var(--ink-2)}
+
+  /* scripts */
+  .script{background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:16px}
+  .script-head{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
+  .script-head b{font-size:13.5px}
+  .script-head .who{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);margin-left:auto}
+  pre{margin:0;padding:16px;font-family:var(--mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);white-space:pre-wrap;overflow-x:auto;background:var(--surface)}
+  pre b{color:var(--ink);font-weight:500}
+  .copy{font-family:var(--sans);font-size:11.5px;font-weight:500;cursor:pointer;padding:4px 10px;border-radius:4px;border:1px solid var(--line);background:transparent;color:var(--ink-2)}
+  .copy:hover{border-color:var(--accent);color:var(--accent)}
+  .copy:focus-visible, .toc a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* objections */
+  .obj{border-bottom:1px solid var(--line-soft);padding:14px 0}
+  .obj:last-child{border-bottom:none}
+  .obj .said{font-family:var(--serif);font-size:17px;font-style:italic;color:var(--ink);margin:0 0 6px}
+  .obj p{margin:0;font-size:14px;color:var(--ink-2)}
+
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+  table{border-collapse:collapse;width:100%;min-width:560px;font-size:13.5px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  th{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);font-weight:400}
+  tr:last-child td{border-bottom:none}
+  td code, td .num{font-family:var(--mono);font-size:12px;color:var(--ink-2)}
+
+  .two-col{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:20px}
+  .panel h4{margin:0 0 10px;font-size:14px}
+  .panel ul{margin:0;padding-left:16px;font-size:13.5px;color:var(--ink-2)}
+  .panel li{margin-bottom:6px}
+  .panel li::marker{color:var(--ink-3)}
+  .panel p{font-size:13.5px;color:var(--ink-2);margin:0}
+
+  .callout{background:var(--warn-soft);border-radius:8px;padding:16px 18px;font-size:13.5px;color:var(--ink-2);margin-top:18px}
+  .callout b{color:var(--ink)}
+
+  footer{border-top:1px solid var(--line);margin-top:50px;padding-top:22px;font-size:13px;color:var(--ink-3)}
+
+  @media (max-width:520px){
+    .wrap{padding-inline:16px}
+    .toc-inner{padding-inline:16px}
+    .spine{padding-left:18px}
+  }
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<nav class="toc">
+  <div class="toc-inner">
+    <a href="#why">Why first</a>
+    <a href="#plan">The two weeks</a>
+    <a href="#gate">Go / no-go</a>
+    <a href="#pitch">Shop pitch</a>
+    <a href="#scripts">Scripts</a>
+    <a href="#logs">What to log</a>
+    <a href="#after">After</a>
+  </div>
+</nav>
+
+<div class="wrap">
+
+  <header class="mast">
+    <p class="kicker">Shelfcall · Pre-build validation · 2 weeks · ~1 h/day</p>
+    <h1>The Supply Test</h1>
+    <p class="lede">Before a line of code: find out whether booksellers actually answer requests. Run the whole loop by hand on WhatsApp for two weeks — you are the platform — and come out with one number that decides whether M1 gets built.</p>
+    <div class="meta-row">
+      <span class="tag ghost">10 shops</span>
+      <span class="tag ghost">30 real requests</span>
+      <span class="tag ghost">No app</span>
+      <span class="tag ghost">No commission</span>
+      <span class="tag go"><span class="dot"></span>Decides M1</span>
+    </div>
+  </header>
+
+  <!-- WHY -->
+  <section id="why">
+    <div class="sec-head"><span class="sec-num">01</span><h2>Why this comes before the build</h2></div>
+
+    <div class="thesis">
+      <p class="q">Will a second-hand bookseller, unpaid and unprompted, answer a stranger’s request with a photo and a price — within a day, more than once?</p>
+      <p>Everything in the spec assumes yes. Twenty screens, four state machines and a commission model all sit on top of that one behaviour. If the answer is no, you have not built the wrong feature — you have built the wrong product.</p>
+    </div>
+
+    <div class="rules">
+      <div class="rule"><b>It needs no app</b><span>A request is a message. An offer is a photo and two lines. WhatsApp already does both — the app only makes it scale.</span></div>
+      <div class="rule"><b>It costs two weeks</b><span>Against roughly three months for M1. The worst outcome is learning in week twelve what week two would have told you.</span></div>
+      <div class="rule"><b>It produces launch supply</b><span>The shops that answer by hand are the shops that make day one of the real app non-empty.</span></div>
+      <div class="rule"><b>It tests the no-chat rule</b><span>Every question a shop has to ask you before they can quote is either a missing field on the offer form, or proof the rule breaks.</span></div>
+    </div>
+
+    <div class="callout">
+      <b>The one thing that invalidates the test:</b> inventing the requests yourself. Fake asks get polite answers and teach you nothing about speed or effort. Every request must come from a person who actually wants the book and will actually pay for it.
+    </div>
+  </section>
+
+  <!-- PLAN -->
+  <section id="plan">
+    <div class="sec-head"><span class="sec-num">02</span><h2>The two weeks</h2></div>
+    <p class="sec-note">Two tracks run in parallel for the first four days — shops and readers — then the loop runs for ten. Budget about an hour a day, more on the recruiting days.</p>
+
+    <div class="spine">
+      <div class="phase">
+        <span class="when">Days 1–4 · track A</span>
+        <h4>Recruit 10 shops, in person</h4>
+        <p>Second-hand booksellers do not sign up through a form. Walk in, ask for the owner, use the pitch in §04. Expect six yeses from ten visits.</p>
+        <ul>
+          <li>Bring nothing to sign. The ask is: “reply to book requests on WhatsApp for two weeks.”</li>
+          <li>Take their WhatsApp number and the name they want shown to buyers.</li>
+          <li>Say plainly that you are running it by hand and that nothing is charged during the test.</li>
+          <li>Prefer variety over volume: two general second-hand shops, one antiquarian, one specialist, one stall, one online-only reseller. You are testing whether the model works across shop types.</li>
+        </ul>
+      </div>
+
+      <div class="phase">
+        <span class="when">Days 1–4 · track B</span>
+        <h4>Collect 30 real requests</h4>
+        <p>You need demand that is genuinely someone’s. Book clubs, university reading groups, Facebook and Telegram book groups, friends who read, the readers who already complain that a title is impossible to find.</p>
+        <ul>
+          <li>Ask for it in their own words — do not tidy it into a catalogue entry.</li>
+          <li>Aim for a spread: roughly half concrete (title, author, edition) and half open (“something about a crazy scientist”). The open half is the part nobody else in the market serves.</li>
+          <li>Record their budget and city, and confirm they will actually buy if the right copy appears.</li>
+          <li>Thirty is the target; twenty is the floor. Below twenty the percentages mean nothing.</li>
+        </ul>
+      </div>
+
+      <div class="phase">
+        <span class="when">Days 5–14</span>
+        <h4>Run the loop by hand</h4>
+        <p>Release requests in a steady trickle — three or four a day, not thirty on Monday. A flood teaches you nothing about a normal day behind the counter.</p>
+        <ul>
+          <li>Send each request to <b>every shop individually</b>, never to a group. Group chats create herd behaviour and hide who ignored what.</li>
+          <li>Forward offers to the reader <b>exactly as the shop sent them</b>. Do not improve the photo, fix the price or rewrite the description — you are measuring what an unassisted offer looks like.</li>
+          <li>Wait the full 72 hours before deciding a request got no answer.</li>
+          <li>Let the sales actually happen: reader goes to the shop, pays cash, takes the book. A test that stops before money changes hands has not tested anything.</li>
+          <li>Log every question a shop asks you. This list is the most valuable thing the test produces.</li>
+        </ul>
+      </div>
+
+      <div class="phase">
+        <span class="when">Day 15</span>
+        <h4>Read the numbers against the gate</h4>
+        <p>The thresholds in §03 were set before the test started, on purpose. Compare, decide, and do not renegotiate them after seeing the result.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- GATE -->
+  <section id="gate">
+    <div class="sec-head"><span class="sec-num">03</span><h2>Go / no-go, decided in advance</h2></div>
+    <p class="sec-note">Write these down now, while you have no data and nothing to defend. The point of a threshold set beforehand is that it can still say no to you afterwards.</p>
+
+    <div class="gate">
+      <div class="gcard go">
+        <span class="tag go"><span class="dot"></span>Build M1</span>
+        <h4>All four hold</h4>
+        <ul>
+          <li><b>≥ 60%</b> of requests get at least one offer within 72 hours</li>
+          <li>Median time to first offer <b>under 24 hours</b></li>
+          <li><b>≥ 40%</b> of the <i>open</i> requests get an offer — the vague ones, not just the ones with an ISBN</li>
+          <li><b>≥ 4 shops</b> answered more than three times each</li>
+        </ul>
+        <div class="then">The last one matters most. One polite reply is courtesy; repeat answering is supply.</div>
+      </div>
+
+      <div class="gcard warn">
+        <span class="tag warn"><span class="dot"></span>Change something first</span>
+        <h4>The partial results</h4>
+        <ul>
+          <li>Offers arrive, but only from <b>one or two</b> shops → you have a supplier, not a marketplace. Recruit differently before building.</li>
+          <li>Only <b>concrete</b> requests get answered → the open half needs a different mechanic, or the positioning changes.</li>
+          <li>Offers arrive but <b>nothing sells</b> → the problem is price, condition or trust, not supply. Watch why readers said no.</li>
+          <li>Almost every offer needed a <b>follow-up question</b> → the no-chat rule is wrong, or the offer form is missing fields.</li>
+        </ul>
+        <div class="then">Each of these is a fixable spec change, not a dead end — but fix it before writing code, not after.</div>
+      </div>
+
+      <div class="gcard stop">
+        <span class="tag stop"><span class="dot"></span>Stop and rethink</span>
+        <h4>The hard no</h4>
+        <ul>
+          <li>Under <b>30%</b> of requests answered in 72 hours, even after you personally chased the shops</li>
+          <li>Shops answer for the first three days, then go quiet — novelty, not demand</li>
+        </ul>
+        <div class="then">Then the product is a different one: seeded supply you buy yourself, a catalogue you build for the shops, or a paid answer. All of those are worth considering — none of them is the app in the spec.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PITCH -->
+  <section id="pitch">
+    <div class="sec-head"><span class="sec-num">04</span><h2>What to say in the shop</h2></div>
+    <p class="sec-note">Sixty seconds, standing at the counter, no laptop. Lead with their shelves, not with your platform.</p>
+
+    <div class="script">
+      <div class="script-head"><b>The opening</b><span class="who">say it out loud</span></div>
+      <pre>People are looking for books you already have on your shelves — they just
+can't find you. I collect what they're asking for and bring it to you.
+You reply with a photo and a price, or you ignore it.
+
+No listing. No inventory. No computer work. One photo and two lines.</pre>
+    </div>
+
+    <div class="script">
+      <div class="script-head"><b>The money, when they ask</b><span class="who">do not bury this</span></div>
+      <pre>Free for your first month — that starts when you send your first offer,
+not today.
+
+After that it's 12% of what you actually sell through it. Only what you
+sell. If you sell nothing, you owe nothing.
+
+The buyer pays you in cash, in your shop or to the courier, the way you
+work now. I never touch the money.</pre>
+    </div>
+
+    <h3>The five objections, and what is actually true</h3>
+    <div class="panel">
+      <div class="obj">
+        <p class="said">“I don’t have time for this.”</p>
+        <p>Answer only the ones you can answer in thirty seconds. Ignoring a request costs nothing and counts against nothing — there is no response rate, no penalty, no rating for silence.</p>
+      </div>
+      <div class="obj">
+        <p class="said">“12% is a lot.”</p>
+        <p>It is on a sale you would not otherwise have had. This is not a browser who wandered in — it is someone who described exactly this book and is waiting for it. And it is charged after the sale, not before.</p>
+      </div>
+      <div class="obj">
+        <p class="said">“Why not just put my books on the sites that already exist?”</p>
+        <p>Because that means listing four thousand books and keeping them current. Here the buyer does the describing and you answer only when you happen to have it. The work is the opposite way round.</p>
+      </div>
+      <div class="obj">
+        <p class="said">“How do I know it’s worth it?”</p>
+        <p>You will see, during these two weeks, exactly how many requests come per week and how many you could have filled. Nothing is charged and nothing is signed. If it is not worth it, you stop answering.</p>
+      </div>
+      <div class="obj">
+        <p class="said">“Who pays the delivery?”</p>
+        <p>The buyer. Or they collect it from your shop, which puts them in front of your shelves — which is usually the better outcome for you.</p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <b>Be honest that it is a test.</b> “For now I’m doing this by hand on WhatsApp — if it works, it becomes an app and you’ll be the first shops on it.” Shops forgive a scrappy test. They do not forgive discovering they were a test.
+    </div>
+  </section>
+
+  <!-- SCRIPTS -->
+  <section id="scripts">
+    <div class="sec-head"><span class="sec-num">05</span><h2>The three messages</h2></div>
+    <p class="sec-note">Keep them identical every time. The format is the prototype of the offer card — if a shop can fill this in without asking you anything, the card works.</p>
+
+    <div class="script">
+      <div class="script-head"><b>1 · Request → shop</b><span class="who">to each shop, individually</span><button class="copy" data-copy="s1">Copy</button></div>
+      <pre id="s1">📚 REQUEST #12 · Yerevan
+
+"I'm wondering about a book with a crazy scientist — fiction,
+not too heavy. Something I could read in a week."
+
+Budget: up to 6 000 ֏ · Any used condition · Courier or pickup
+
+Have something? Reply with:
+  • a photo of the actual copy
+  • title, author, year
+  • condition
+  • your price
+
+Don't have it? Ignore this — no reply needed.</pre>
+    </div>
+
+    <div class="script">
+      <div class="script-head"><b>2 · Offers → reader</b><span class="who">forwarded exactly as received</span><button class="copy" data-copy="s2">Copy</button></div>
+      <pre id="s2">3 shops answered your request 👇
+
+1) [photo]
+   Frankenstein · Mary Shelley · Progress 1979
+   Good used — spine faded, pages clean
+   4 500 ֏ · Aram Books, Mashtots 41 (pickup or courier +1000)
+
+2) [photo]
+   Dr Jekyll and Mr Hyde · Penguin 2003
+   Like new — 3 200 ֏ · Nairi, Tumanyan 12 (pickup only)
+
+3) [photo]
+   Solaris · Lem · 1988
+   Worn cover — 3 000 ֏ · Grigor, online, courier 1000 ֏
+
+Reply with the number you want, or "none" and I'll keep looking.</pre>
+    </div>
+
+    <div class="script">
+      <div class="script-head"><b>3 · Sale → shop</b><span class="who">when the reader picks</span><button class="copy" data-copy="s3">Copy</button></div>
+      <pre id="s3">✅ Sold — your Frankenstein, 4 500 ֏
+
+Buyer: Dina, +374 ·· ·· ·· ··
+She'll collect from the shop tomorrow afternoon and pay you
+in cash. Please put it aside.
+
+Nothing owed to me — the test month is free.</pre>
+    </div>
+
+    <p style="font-size:13.5px;color:var(--ink-2)">Two days after the handover, ask the reader one question and nothing more: <i>“Would you buy from that shop again — and why?”</i> That answer is your first review, and it tells you whether the reputation system is carrying real information.</p>
+  </section>
+
+  <!-- LOGS -->
+  <section id="logs">
+    <div class="sec-head"><span class="sec-num">06</span><h2>What to write down</h2></div>
+    <p class="sec-note">Two tables in a spreadsheet, filled in as you go. Reconstructing this at the end from a WhatsApp scroll is how tests end up proving whatever you already believed.</p>
+
+    <h3>One row per request</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Column</th><th>Why it is there</th></tr></thead>
+        <tbody>
+          <tr><td><code>id</code>, <code>text</code>, <code>kind</code> (open/concrete)</td><td>The open/concrete split is the headline result — it says whether the vague half of the product works.</td></tr>
+          <tr><td><code>posted_at</code>, <code>first_offer_at</code></td><td>Median time to first offer. The single most predictive number you will collect.</td></tr>
+          <tr><td><code>offers_24h</code>, <code>offers_72h</code></td><td>Tests the 24 h and 72 h thresholds already written into the spec.</td></tr>
+          <tr><td><code>shops_answered</code></td><td>Names, not a count — it reveals whether supply is a market or one keen shop.</td></tr>
+          <tr><td><code>photo_ok</code></td><td>Was the photo usable as the card’s cover image? A shelf photo taken in bad light is a product problem.</td></tr>
+          <tr><td><code>bought</code>, <code>why_not</code></td><td>Separates a supply failure from a price, condition or trust failure.</td></tr>
+          <tr><td><code>questions_asked</code></td><td>Every clarification a shop needed before quoting. Each one is a field to add or a rule to reconsider.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>One row per shop</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Column</th><th>Why it is there</th></tr></thead>
+        <tbody>
+          <tr><td><code>name</code>, <code>type</code>, <code>locations</code></td><td>Type (general, antiquarian, specialist, stall, online) shows which kind of shop the model fits.</td></tr>
+          <tr><td><code>said_yes</code>, <code>visited_at</code></td><td>Your conversion rate on the doorstep, which is also your future recruitment cost.</td></tr>
+          <tr><td><code>requests_seen</code>, <code>offers_made</code></td><td>Answer rate per shop. Under 10% means they said yes to be polite.</td></tr>
+          <tr><td><code>median_response</code></td><td>Some shops answer in ten minutes, some in two days. It decides whether 72 hours is the right window.</td></tr>
+          <tr><td><code>sold</code>, <code>value</code></td><td>What 12% would have been. Shows a shop what they left on the table — the strongest thing you can say at launch.</td></tr>
+          <tr><td><code>still_answering_wk2</code></td><td>The novelty check. Week-two silence is the result that matters most.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="two-col" style="margin-top:22px">
+      <div class="panel">
+        <h4>The qualitative log</h4>
+        <p>A plain list, one line per incident, kept for the whole two weeks: every question a shop asked, every request a reader phrased in a way you had to interpret, every moment you were tempted to help a shop write a better offer. This list is what turns the spec from a guess into a design.</p>
+      </div>
+      <div class="panel">
+        <h4>Do not measure</h4>
+        <ul>
+          <li>Anything about the interface — there isn’t one.</li>
+          <li>Willingness to pay commission. Nobody is being charged, so any answer is polite fiction.</li>
+          <li>Reader retention. Two weeks is too short to mean anything.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- AFTER -->
+  <section id="after">
+    <div class="sec-head"><span class="sec-num">07</span><h2>The day after</h2></div>
+
+    <div class="two-col">
+      <div class="panel">
+        <h4>If the gate says go</h4>
+        <ul>
+          <li>Build <b>M1</b> — sign-up, requests, feed, offers with photos. Nothing about money.</li>
+          <li>Onboard the shops that answered, by hand, before launch day. Their WhatsApp offers become the app’s first real content.</li>
+          <li>Show each shop their own line: requests seen, offers made, sold, value. That is the recruitment pitch for every shop after them.</li>
+          <li>Feed the questions log straight into the offer form (S-14) and the request form (S-03) before building either.</li>
+          <li>Start the free month properly at their first offer <i>in the app</i> — the test does not consume it.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h4>Two things to write while it runs</h4>
+        <ul>
+          <li>The <b>seller agreement</b>: one page, plain language — 12%, what is owed when, that restriction is the consequence of not paying. The commission rests on trust and feed access, so it should be something a seller actually agreed to.</li>
+          <li>The <b>instrumentation list</b> for M1, taken from the columns above. Time to first offer, share of requests answered in 72 h, offers per request, order rate, repeat-request rate. Build them in from the first release — they are the same numbers, measured automatically instead of by hand.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout">
+      <b>The result you should hope for is a mixed one.</b> A clean pass tells you only that you were right. The partial results in §03 are the ones that change the product while changing it is still cheap.
+    </div>
+  </section>
+
+  <footer>
+    Companion to the Shelfcall MVP spec. Figures in the scripts are illustrative; shop and reader names are invented. Thresholds set 22 Sep 2026, before any data existed.
+  </footer>
+</div>
+
+<script>
+  (function(){
+    document.querySelectorAll('.copy').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var el = document.getElementById(btn.dataset.copy);
+        if (!el) return;
+        var done = function(){ var t = btn.textContent; btn.textContent = 'Copied'; setTimeout(function(){ btn.textContent = t; }, 1400); };
+        try {
+          navigator.clipboard.writeText(el.textContent).then(done, function(){ select(el); });
+        } catch (e) { select(el); }
+      });
+    });
+    function select(el){
+      try {
+        var r = document.createRange(); r.selectNodeContents(el);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      } catch (e) {}
+    }
+    var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+    var secs = links.map(function(l){ return document.querySelector(l.getAttribute('href')); });
+    function sync(){
+      var y = window.scrollY + 120, cur = 0;
+      secs.forEach(function(s, i){ if (s && s.offsetTop <= y) cur = i; });
+      links.forEach(function(l, i){ l.classList.toggle('on', i === cur); });
+    }
+    window.addEventListener('scroll', sync, {passive:true});
+    sync();
+  })();
+</script>

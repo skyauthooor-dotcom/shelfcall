@@ -1,0 +1,28 @@
+<!-- @dsCard group="Data display" height=190 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+  body{margin:0;padding:20px;font-family:var(--font-sans);background:var(--background);color:var(--foreground)}
+  .wrap{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .col{display:flex;flex-direction:column;gap:12px;max-width:520px}
+  .note{color:var(--muted-foreground);font-size:12px;line-height:16px;margin:2px 0 0}
+</style>
+<div class="col">
+  <div class="wrap">
+    <span data-slot="badge">to collect</span>
+    <span data-slot="badge">held until 26 Sep</span>
+    <span data-slot="badge">pickup</span>
+    <span data-slot="badge">open-ended</span>
+    <span data-slot="badge" data-variant="dim">new seller</span>
+  </div>
+  <div class="wrap">
+    <span data-slot="badge" data-variant="strong">confirm by 15:26</span>
+    <span data-slot="badge" data-variant="strong"><i data-slot="badge-dot"></i>24 min left</span>
+    <span data-slot="badge" data-variant="destructive">past its hour</span>
+  </div>
+  <!-- the comparison that makes the rule obvious -->
+  <div class="wrap">
+    <span data-slot="badge">a label: a ground, no edge</span>
+    <button data-slot="button" data-variant="outline">a button: an edge</button>
+  </div>
+  <p class="note">Border means button. A badge never carries one, and never a solid ink fill either — that is the one action of the screen.</p>
+</div>

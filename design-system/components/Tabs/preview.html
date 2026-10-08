@@ -1,0 +1,17 @@
+<!-- @dsCard group="Navigation" height=160 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+  body{margin:0;padding:20px;font-family:var(--font-sans);background:var(--background);color:var(--foreground)}
+  .wrap{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+  .col{display:flex;flex-direction:column;gap:12px;max-width:520px}
+</style>
+<div class="col">
+  <div data-slot="tabs-list">
+    <button data-slot="tabs-trigger" data-state="active">All</button>
+    <button data-slot="tabs-trigger">Not answered by you</button>
+    <button data-slot="tabs-trigger">Open-ended</button>
+  </div>
+  <div data-slot="tabs-content" style="padding-top:8px">
+    <p style="margin:0;font-size:14px;color:var(--muted-foreground)">Six requests. Answer the ones your shelves can answer; ignore the rest.</p>
+  </div>
+</div>

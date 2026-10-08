@@ -1,0 +1,43 @@
+<!-- @dsCard height=288 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap">
+<style>
+  body{margin:0;background:var(--background);font-family:var(--font-sans)}
+  svg{display:block;width:100%;height:auto}
+  .ink   {fill:var(--primary)}
+  .deep  {fill:var(--foreground)}
+  .grey  {fill:var(--muted-foreground)}
+  .soft  {fill-opacity:.45}
+  .red   {fill:var(--destructive)}
+  .shelf {fill:var(--muted-foreground);fill-opacity:.3}
+  .spine {rx:var(--radius-sm)}
+  .name  {fill:var(--foreground);font-size:76px;font-weight:600;letter-spacing:-.03em}
+  .tag   {fill:var(--muted-foreground);font-size:13px;letter-spacing:.01em}
+</style>
+<svg viewBox="0 0 960 288" role="img" aria-label="Shelfcall">
+  <!-- blocks: primary x3, foreground x1, muted-foreground x4 (two at 45%), destructive x1;
+       widths 16-56px in multiples of space-1, heights 96-260px on one baseline at y=236.
+       arrangement: nine unequal vertical spines standing on a shelf, the tallest bleeding off
+       the top edge - a shelf of books seen straight on, which no other shadcn system draws.
+       pattern: three hairlines. The README states one visual rule outright - borders separate,
+       shadows do not - so the pattern is the border itself, used as the shelves behind the books.
+       scales: rx = radius-sm 6px, gaps = space-2 8px, widths multiples of space-1 4px,
+       rules 2px at muted-foreground 30%. -->
+  <g class="shelf">
+    <rect x="512" y="62"  width="404" height="2"/>
+    <rect x="512" y="148" width="404" height="2"/>
+    <rect x="512" y="236" width="404" height="2"/>
+  </g>
+  <g class="spine">
+      <rect class="ink" x="520" y="56" width="56" height="180"/>
+      <rect class="grey" x="584" y="96" width="24" height="140"/>
+      <rect class="red" x="616" y="36" width="16" height="200"/>
+      <rect class="grey soft" x="640" y="116" width="48" height="120"/>
+      <rect class="ink" x="696" y="6" width="32" height="230"/>
+      <rect class="grey" x="736" y="140" width="20" height="96"/>
+      <rect class="deep" x="764" y="-24" width="40" height="260"/>
+      <rect class="grey soft" x="812" y="86" width="28" height="150"/>
+      <rect class="ink" x="848" y="126" width="52" height="110"/>
+  </g>
+  <text class="name" x="56" y="212">Shelfcall</text>
+  <text class="tag"  x="58" y="240">Readers ask for a book. Booksellers answer with a real copy.</text>
+</svg>

@@ -1,0 +1,376 @@
+/* Shelfcall on shadcn/ui.
+   Selectors key off the data-slot attributes shadcn's React components emit,
+   so the markup in every preview is the markup the real components produce.
+   Radix behaviour is NOT here - see shadcn.md. */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+  -webkit-font-smoothing: antialiased;
+}
+
+:where(button, [role="button"]) { font: inherit; cursor: pointer; }
+
+:where(a):focus-visible,
+:where(button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 1px;
+}
+
+/* ---------------------------------------------------------------- Button */
+[data-slot="button"] {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  white-space: nowrap; border-radius: var(--radius-md);
+  font-size: 14px; line-height: 20px; font-weight: 500;
+  height: 40px; padding-inline: 16px;
+  border: 1px solid transparent; background: transparent; color: var(--foreground);
+  transition: background-color .15s, color .15s, border-color .15s;
+}
+/* THERE IS ONE BUTTON SIZE. 40px, 14px type, everywhere - in a row, in a
+   card, at the bottom of a flow. The sizes below are kept so existing markup
+   does not break, and they all resolve to the same metrics.
+   Three heights meant a reader had to learn that 32px and 40px were both
+   buttons while 20px underlined text was one too. Importance is carried by
+   fill and by width, which are read at a glance; height is not.
+   `icon` is the only real exception, because it is square by definition. */
+[data-slot="button"][data-size="sm"],
+[data-slot="button"][data-size="xs"],
+[data-slot="button"][data-size="lg"]  { height: 40px; padding-inline: 16px;
+  border-radius: var(--radius-md); font-size: 14px; gap: 8px; }
+[data-slot="button"][data-block]      { padding-inline: 24px; }
+[data-slot="button"][data-size="icon"]{ width: 40px; padding-inline: 0; }
+[data-slot="button"][data-block]      { display: flex; width: 100%; }
+
+/* BORDER MEANS BUTTON. That one sentence is the whole system.
+   Black was doing three jobs at once - "press this", "this is selected" and
+   "this is running out of time" - and the fix is shape, not a hue:
+     press this        a solid ink fill WITH a border. One per screen.
+     this is selected  a tinted ground and NO border. See Badge.
+     running out       a tinted ground and a dot; tint-bad once it has gone.
+   A hue was tried here and removed. The logo is black type on white paper, a
+   reference to printing, and it works reversed; an accent colour is a thing
+   the mark does not have. Shape survives a photocopy and a colour-blind
+   reader, which a hue does not. */
+[data-slot="button"][data-variant="default"]   { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); }
+[data-slot="button"][data-variant="default"]:hover   { background: color-mix(in oklab, var(--primary) 88%, var(--background)); }
+[data-slot="button"][data-variant="secondary"] { background: var(--secondary); color: var(--secondary-foreground); border-color: var(--border); }
+[data-slot="button"][data-variant="secondary"]:hover { background: color-mix(in oklab, var(--secondary) 80%, var(--foreground) 6%); }
+[data-slot="button"][data-variant="outline"]   { border-color: var(--border); background: var(--background); color: var(--foreground); }
+[data-slot="button"][data-variant="outline"]:hover   { background: var(--accent); color: var(--accent-foreground); }
+[data-slot="button"][data-variant="ghost"]     { color: var(--foreground); }
+[data-slot="button"][data-variant="ghost"]:hover     { background: var(--accent); color: var(--accent-foreground); }
+/* link is text that navigates. It keeps a 36px hit box even though it looks
+   like type, because a thumb cannot aim at a 20px line. */
+[data-slot="button"][data-variant="link"]      { color: var(--foreground); text-decoration: underline;
+  text-underline-offset: 3px; text-decoration-color: var(--border); min-height: 40px; padding: 0 2px; }
+[data-slot="button"][data-variant="link"]:hover { text-decoration-color: var(--foreground); }
+/* every button answers the finger */
+[data-slot="button"]:active { transform: scale(.985); }
+/* dark takes `background` as its ink: white on destructive is 2.9:1 there */
+[data-slot="button"][data-variant="destructive"] { background: var(--destructive); color: #fff; }
+[data-theme="dark"] [data-slot="button"][data-variant="destructive"] { color: var(--background); }
+[data-slot="button"][disabled] { opacity: .5; pointer-events: none; }
+
+/* ------------------------------------------------------------------ Card */
+[data-slot="card"] {
+  display: flex; flex-direction: column; gap: 24px;
+  background: var(--card); color: var(--card-foreground);
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding-block: 24px;
+}
+[data-slot="card-header"] {
+  display: grid; grid-auto-rows: min-content; row-gap: 6px;
+  padding-inline: 24px;
+}
+[data-slot="card-header"]:has([data-slot="card-action"]) {
+  grid-template-columns: 1fr auto; column-gap: 16px;
+}
+[data-slot="card-title"]       { font-weight: 600; line-height: 1; margin: 0; }
+[data-slot="card-description"] { color: var(--muted-foreground); font-size: 14px; margin: 0; }
+[data-slot="card-action"]      { grid-column: 2; grid-row: 1 / span 2; align-self: start; justify-self: end; }
+[data-slot="card-content"]     { padding-inline: 24px; }
+[data-slot="card-footer"]      { display: flex; align-items: center; gap: 8px; padding-inline: 24px; }
+[data-slot="card"][data-compact] { gap: 16px; padding-block: 16px; }
+[data-slot="card"][data-compact] :where([data-slot="card-header"],[data-slot="card-content"],[data-slot="card-footer"]) { padding-inline: 16px; }
+
+/* ----------------------------------------------------------------- Badge */
+/* A LABEL HAS NO BORDER. It sits on a tinted ground instead.
+   Before this, a badge and an outline button were both "text in a box" and
+   the reader had to tap one to find out which. Now the border is reserved:
+   an edge means you can press it, a ground means you cannot.
+   Nothing here is ever a solid ink fill either - that is the primary button,
+   and there is one of those per screen. */
+[data-slot="badge"] {
+  display: inline-flex; align-items: center; gap: 4px;
+  border-radius: var(--radius-sm); border: 0;
+  background: var(--tint); color: var(--foreground);
+  padding: 3px 9px; font-size: 12px; line-height: 16px; font-weight: 500;
+  white-space: nowrap; width: fit-content;
+}
+/* default is the plain label; `strong` is a label that is SELECTED or LIVE -
+   a chosen filter, a count, a running countdown. One step of ground and one
+   step of weight, which is as loud as a label is allowed to get. */
+[data-slot="badge"][data-variant="strong"]      { background: var(--tint-strong); font-weight: 600; }
+[data-slot="badge"][data-variant="dim"]         { background: var(--tint); color: var(--muted-foreground); font-weight: 400; }
+/* the subject of this label was lost: a lapsed window, an overdue statement.
+   The tinted form of destructive, never the filled one - a filled red badge
+   reads as a button that deletes something. */
+[data-slot="badge"][data-variant="destructive"] { background: var(--tint-bad); color: var(--destructive); font-weight: 600; }
+[data-slot="badge"] [data-slot="badge-dot"] { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+
+/* ------------------------------------------------------- Input / Label */
+[data-slot="label"] {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; line-height: 20px; font-weight: 500; margin-bottom: 8px;
+}
+[data-slot="input"], [data-slot="textarea"], [data-slot="select"] {
+  display: block; width: 100%; min-height: 36px;
+  background: var(--background); color: var(--foreground);
+  border: 1px solid var(--input); border-radius: var(--radius-md);
+  padding: 8px 12px; font: inherit; font-size: 14px;
+}
+[data-slot="textarea"] { min-height: 72px; resize: vertical; line-height: 20px; }
+[data-slot="input"]::placeholder, [data-slot="textarea"]::placeholder { color: var(--muted-foreground); }
+[data-slot="input"][aria-invalid="true"],
+[data-slot="textarea"][aria-invalid="true"] { border-color: var(--destructive); }
+[data-slot="field-description"] { color: var(--muted-foreground); font-size: 12px; line-height: 16px; margin: 6px 0 0; }
+[data-slot="field-error"]       { color: var(--destructive); font-size: 12px; line-height: 16px; margin: 6px 0 0; }
+
+/* ----------------------------------------------------------------- Alert */
+[data-slot="alert"] {
+  display: grid; grid-template-columns: 0 1fr; gap: 0 0;
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--card); color: var(--card-foreground);
+  padding: 16px; font-size: 14px;
+}
+[data-slot="alert"]:has([data-slot="alert-icon"]) { grid-template-columns: 16px 1fr; column-gap: 12px; }
+[data-slot="alert-icon"]        { grid-row: 1 / span 2; margin-top: 2px; }
+[data-slot="alert-title"]       { font-weight: 500; line-height: 20px; margin: 0; }
+[data-slot="alert-description"] { color: var(--muted-foreground); line-height: 20px; margin: 4px 0 0; grid-column-start: 2; }
+[data-slot="alert"][data-variant="destructive"] { border-color: var(--destructive); color: var(--destructive); }
+[data-slot="alert"][data-variant="destructive"] [data-slot="alert-description"] { color: var(--destructive); }
+
+/* ------------------------------------------------------------- Separator */
+[data-slot="separator"] { background: var(--border); border: 0; flex: none; }
+[data-slot="separator"][data-orientation="horizontal"] { height: 1px; width: 100%; margin: 0; }
+[data-slot="separator"][data-orientation="vertical"]   { width: 1px; align-self: stretch; }
+
+/* ------------------------------------------------------------------ Item */
+[data-slot="item"] {
+  display: flex; align-items: flex-start; gap: 16px;
+  padding: 16px; border-radius: var(--radius-lg);
+  text-align: left; width: 100%; background: transparent; border: 0;
+  color: var(--foreground);
+}
+[data-slot="item"][data-variant="outline"] { border: 1px solid var(--border); background: var(--card); }
+a[data-slot="item"]:hover, button[data-slot="item"]:hover { background: var(--accent); }
+[data-slot="item-media"]       { flex: none; }
+[data-slot="item-content"]     { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+[data-slot="item-title"]       { font-size: 14px; line-height: 20px; font-weight: 500; margin: 0; }
+[data-slot="item-description"] { font-size: 12px; line-height: 16px; color: var(--muted-foreground); margin: 0; }
+[data-slot="item-actions"]     { display: flex; align-items: center; gap: 8px; flex: none; }
+[data-slot="item-group"]       { display: flex; flex-direction: column; }
+[data-slot="item-separator"]   { height: 1px; background: var(--border); border: 0; margin: 0; }
+
+/* ---------------------------------------------------------------- Switch */
+/* THE HIT AREA AND THE CONTROL ARE TWO BOXES.
+   The button is 40x40 and paints nothing; the 32x18 track is drawn inside it.
+   Padding the button out to 40px and clawing the background back with
+   background-clip loses to the pill radius and renders the whole control as a
+   black disc — which is exactly what shipped once. Do not merge them again. */
+[data-slot="switch"] {
+  position: relative; flex: none; width: 40px; height: 40px;
+  padding: 0; border: 0; background: none; display: inline-block;
+}
+[data-slot="switch"]::before {
+  content: ""; position: absolute; left: 4px; top: 11px; width: 32px; height: 18px;
+  border-radius: var(--radius-full); background: var(--secondary); transition: background-color .15s;
+}
+[data-slot="switch"][aria-checked="true"]::before { background: var(--primary); }
+[data-slot="switch-thumb"] {
+  position: absolute; top: 13px; left: 6px; z-index: 1;
+  width: 14px; height: 14px; border-radius: var(--radius-full);
+  background: var(--background); transition: left .15s;
+}
+[data-slot="switch"][aria-checked="true"] [data-slot="switch-thumb"] { left: 20px; background: var(--primary-foreground); }
+[data-slot="switch"]:focus-visible { outline: none; }
+[data-slot="switch"]:focus-visible::before { box-shadow: 0 0 0 3px var(--ring); }
+
+/* -------------------------------------------------------------- Tab bar */
+/* The phone's navigation, at the bottom where the thumb is. Above 560px it is
+   not shown at all and the sections live in the top bar instead. */
+[data-slot="tabbar"] { display: none; }
+@media (max-width: 560px) {
+  [data-slot="tabbar"] {
+    display: block; position: fixed; inset: auto 0 0 0; z-index: 40;
+    background: var(--background); border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  [data-slot="tabbar"] nav { display: flex; max-width: 560px; margin: 0 auto; }
+  [data-slot="tabbar-item"] {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; min-height: 56px; padding: 8px 2px 7px; position: relative;
+    font-size: 11px; line-height: 14px; color: var(--muted-foreground);
+    background: none; border: 0;
+  }
+  [data-slot="tabbar-item"] svg { width: 21px; height: 21px; stroke-width: 1.6; }
+  /* weight AND fill, never colour alone: three languages, and readers who do
+     not separate colours */
+  [data-slot="tabbar-item"][aria-current="true"] { color: var(--foreground); font-weight: 600; }
+  [data-slot="tabbar-item"][aria-current="true"] svg { stroke-width: 2.1; }
+  [data-slot="tabbar-item"] > span { max-width: 100%; padding: 0 2px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+}
+
+/* ------------------------------------------------------------ Pick card */
+/* A choice big enough to read, with a sentence of its own. Tapping one both
+   chooses and moves on — it is a fork in the flow, not a radio button. */
+[data-slot="pick"] {
+  display: block; width: 100%; text-align: left; background: var(--background);
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: 16px; margin-bottom: 12px;
+}
+[data-slot="pick"]:hover { border-color: var(--foreground); }
+[data-slot="pick"][aria-pressed="true"] { border-color: var(--foreground); box-shadow: inset 0 0 0 1px var(--foreground); }
+
+/* ------------------------------------------------------------------ Tabs */
+[data-slot="tabs-list"] {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--muted); border-radius: var(--radius-md); padding: 3px;
+  width: fit-content; max-width: 100%; overflow-x: auto;
+}
+[data-slot="tabs-trigger"] {
+  border: 0; background: transparent; color: var(--muted-foreground);
+  font-size: 14px; line-height: 20px; font-weight: 500;
+  padding: 5px 12px; border-radius: var(--radius-sm); white-space: nowrap;
+}
+[data-slot="tabs-trigger"][data-state="active"] { background: var(--background); color: var(--foreground); }
+[data-slot="tabs-content"] { padding-top: 16px; }
+
+/* ----------------------------------------------------------------- Empty */
+[data-slot="empty"] {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  border: 1px dashed var(--border); border-radius: var(--radius-lg);
+  padding: 40px 24px; text-align: center;
+}
+[data-slot="empty-title"]       { font-size: 14px; font-weight: 500; margin: 0; }
+[data-slot="empty-description"] { font-size: 14px; color: var(--muted-foreground); margin: 0; max-width: 46ch; }
+[data-slot="empty-content"]     { margin-top: 8px; }
+
+/* ---------------------------------------------------------------- Avatar */
+[data-slot="avatar"] {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  overflow: hidden; position: relative; border-radius: var(--radius-full);
+  background: var(--muted); color: var(--muted-foreground);
+  font-weight: 500; line-height: 1; text-transform: uppercase; user-select: none;
+}
+[data-slot="avatar"] img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+[data-slot="avatar"][data-size="xs"] { width: 20px; height: 20px; font-size: 9px; }
+[data-slot="avatar"][data-size="sm"] { width: 28px; height: 28px; font-size: 11px; }
+[data-slot="avatar"][data-size="md"] { width: 40px; height: 40px; font-size: 14px; }
+[data-slot="avatar"][data-size="lg"] { width: 64px; height: 64px; font-size: 22px; }
+
+/* ================================================ Shelfcall's own four === */
+
+/* BookCover - a book with no photograph */
+[data-slot="book-cover"] {
+  flex: none; position: relative; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  background: var(--muted); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 8px 7px;
+  width: 48px; height: 66px;
+}
+[data-slot="book-cover"][data-size="md"] { width: 64px; height: 90px; }
+[data-slot="book-cover"][data-size="lg"] { width: 128px; height: 180px; padding: 14px 12px; }
+[data-slot="book-cover"] img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+[data-slot="book-cover-title"], [data-slot="book-cover-author"] {
+  position: relative; margin: 0; overflow: hidden;
+  display: -webkit-box; -webkit-box-orient: vertical; overflow-wrap: anywhere;
+}
+[data-slot="book-cover-title"]  { font-size: 9px; line-height: 1.15; color: var(--foreground); -webkit-line-clamp: 3; }
+[data-slot="book-cover-author"] { font-size: 8px; line-height: 1.15; color: var(--muted-foreground); margin-top: 3px; -webkit-line-clamp: 1; }
+[data-slot="book-cover"][data-size="lg"] [data-slot="book-cover-title"]  { font-size: 15px; -webkit-line-clamp: 4; }
+[data-slot="book-cover"][data-size="lg"] [data-slot="book-cover-author"] { font-size: 11px; margin-top: 6px; }
+
+/* HandoverCode - the four digits, read aloud */
+[data-slot="handover-code"] {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px;
+  background: var(--card);
+}
+[data-slot="handover-code-digits"] {
+  font-family: var(--font-mono); font-size: 28px; line-height: 32px;
+  font-weight: 500; letter-spacing: .2em; color: var(--foreground);
+}
+[data-slot="handover-code-label"] {
+  font-size: 12px; line-height: 16px; color: var(--muted-foreground);
+  margin: 0; flex: 1; min-width: 160px;
+}
+
+/* ReasonBlock - nothing destructive happens on one tap */
+[data-slot="reason-block"] {
+  border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px;
+  background: var(--card);
+}
+[data-slot="reason-block"][data-state="open"] { border-color: var(--destructive); }
+[data-slot="reason-block-trigger"] {
+  border: 0; background: transparent; padding: 0;
+  font-size: 14px; font-weight: 500; color: var(--muted-foreground); text-align: left;
+}
+[data-slot="reason-block-trigger"]:hover { color: var(--destructive); }
+[data-slot="reason-block-title"]  { font-size: 14px; font-weight: 500; color: var(--destructive); margin: 0; }
+[data-slot="reason-block-body"]   { font-size: 14px; line-height: 20px; color: var(--muted-foreground); margin: 6px 0 0; }
+[data-slot="reason-block-reasons"]{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+/* OfferCard - one bookseller's answer to one request */
+[data-slot="offer-card"] { display: flex; gap: 16px; padding: 16px; }
+[data-slot="offer-card-body"] { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+[data-slot="offer-card-title"] { font-size: 18px; line-height: 24px; font-weight: 600; margin: 0; }
+[data-slot="offer-card-note"] {
+  font-size: 14px; line-height: 20px; color: var(--foreground); margin: 0;
+  border-left: 2px solid var(--border); padding-left: 12px;
+  overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4;
+}
+[data-slot="offer-card-meta"] { font-size: 12px; line-height: 16px; color: var(--muted-foreground); margin: 0; }
+[data-slot="offer-card-price"] { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+[data-slot="offer-card-actions"] { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+
+/* ----------------------------------------------------------------- Sheet */
+/* The confirmation sheet. Anything that cannot be undone - closing a request,
+   taking an offer down, handing cash over, giving up on a delivery - stops
+   here first. It is a native <dialog>, so Escape, the backdrop and focus
+   trapping are the browser's job rather than ours.
+   It rises from the bottom because the thumb is at the bottom, and the
+   confirm sits above the way out so the dismissal is the nearer of the two. */
+[data-slot="sheet"] {
+  border: 0; padding: 0; margin: 0 0 0 auto; max-width: 520px; width: 100%;
+  position: fixed; inset: auto 0 0 0; background: transparent;
+}
+[data-slot="sheet"]::backdrop { background: oklch(0 0 0 / 45%); }
+[data-slot="sheet"][open] > * { animation: sheet-up .18s cubic-bezier(.2,.8,.3,1); }
+@keyframes sheet-up { from { transform: translateY(14px); opacity: 0 } }
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="sheet"][open] > * { animation: none; }
+}
+[data-slot="sheet-content"] {
+  background: var(--popover); color: var(--popover-foreground);
+  border-top: 1px solid var(--border);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: 10px 20px calc(20px + env(safe-area-inset-bottom));
+}
+[data-slot="sheet-grip"] {
+  width: 36px; height: 4px; border-radius: 999px; background: var(--border);
+  margin: 0 auto 14px;
+}
+[data-slot="sheet-title"] { margin: 0; font-size: 17px; line-height: 24px; font-weight: 600; letter-spacing: -.01em; }
+[data-slot="sheet-body"]  { margin: 6px 0 0; color: var(--muted-foreground); font-size: 14px; line-height: 20px; }
+/* Stacked, full width, confirm first. Side by side would put a destructive
+   action one thumb-slip away from the way out. */
+[data-slot="sheet-actions"] { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+[data-slot="sheet-actions"] [data-slot="button"] { width: 100%; }

@@ -1,0 +1,25 @@
+<!-- @dsCard group="Shelfcall" height=340 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+  body{margin:0;padding:20px;font-family:var(--font-sans);background:var(--background);color:var(--foreground)}
+  .wrap{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+  .col{display:flex;flex-direction:column;gap:12px;max-width:560px}
+</style>
+<div class="col">
+  <div style="border:1px solid var(--border);border-radius:var(--radius-lg)">
+    <div data-slot="offer-card">
+      <div data-slot="book-cover" data-size="md"><p data-slot="book-cover-title">The Chrysalids</p><p data-slot="book-cover-author">John Wyndham</p></div>
+      <div data-slot="offer-card-body">
+        <p data-slot="offer-card-title">The Chrysalids</p>
+        <p data-slot="offer-card-note">&ldquo;A mad-scientist novel that is funny rather than grim &mdash; the narrator is the experiment. 180 pages.&rdquo;</p>
+        <p data-slot="offer-card-meta">John Wyndham &middot; 1978 &middot; good used</p>
+        <p data-slot="offer-card-meta">Aram Books &mdash; Mashtots branch &middot; 4.7 (3)</p>
+        <div data-slot="offer-card-actions">
+          <button data-slot="button" data-variant="default" data-size="sm">Add to cart</button>
+          <button data-slot="button" data-variant="ghost" data-size="sm">Not this</button>
+        </div>
+      </div>
+      <span data-slot="offer-card-price">3 800 ֏</span>
+    </div>
+  </div>
+</div>

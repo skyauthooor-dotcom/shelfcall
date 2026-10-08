@@ -1,0 +1,25 @@
+{
+  "v": 3,
+  "layout": "files",
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-09-23T10:58:35Z"
+  },
+  "title": "Shelfcall",
+  "namespace": "Shelfcall",
+  "libraries": [],
+  "sections": {},
+  "groups": [],
+  "assetGroups": {},
+  "blobs": {},
+  "docs": {
+    "readme": "project/README.md",
+    "sections": []
+  },
+  "lastChange": {
+    "by": "Tigran",
+    "at": "2026-09-26T10:30:00Z",
+    "via": "Cowork",
+    "note": "The accent hue is removed: the logo is black type on white paper and works reversed, so the system is two colours and one of them is the paper. Black is freed by shape - BORDER MEANS BUTTON. Badge loses outline and filled, gains tinted grounds; one button size (40px); Sheet added and ReasonBlock opens one; the floor is #1C1C1C in both themes."
+  }
+}

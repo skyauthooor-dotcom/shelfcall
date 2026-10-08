@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex">
+<title>Shelfcall Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap">
+<style>
+  /* The same two colours as the app: ink and paper. Border means button. */
+  :root{
+    --background:#f4f4f4; --card:#fafafa; --foreground:oklch(0.226 0 0);
+    --muted-foreground:#5e5e5e; --border:#dddddd; --edge:#7a7a7a;
+    --primary:oklch(0.226 0 0); --primary-foreground:oklch(0.985 0 0);
+    --tint:color-mix(in oklab, var(--foreground) 6%, var(--background));
+    --radius:0.625rem;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --background:oklch(0.226 0 0); --card:oklch(0.26 0 0); --foreground:oklch(0.985 0 0);
+      --muted-foreground:oklch(0.708 0 0); --border:oklch(1 0 0 / 10%); --edge:rgb(255 255 255 / 0.38);
+      --primary:oklch(0.922 0 0); --primary-foreground:oklch(0.226 0 0);
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--background);color:var(--foreground);
+       font:14px/20px Geist,ui-sans-serif,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+  main{max-width:720px;margin:0 auto;padding:48px 16px 64px}
+  .logo{font-size:18px;font-weight:600;letter-spacing:-.02em;margin:0 0 40px}
+  h1{font-size:28px;line-height:36px;font-weight:600;letter-spacing:-.02em;margin:0 0 8px;text-wrap:balance}
+  .sub{color:var(--muted-foreground);margin:0 0 32px;max-width:56ch}
+  h2{font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-foreground);margin:36px 0 12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+  a.card{display:block;text-decoration:none;color:inherit;background:var(--card);
+         border:1px solid var(--edge);border-radius:var(--radius);padding:16px;min-height:44px}
+  a.card:hover{border-color:var(--foreground)}
+  a.card:focus-visible{outline:3px solid var(--muted-foreground);outline-offset:2px}
+  a.card.main{background:var(--primary);color:var(--primary-foreground);border-color:var(--primary)}
+  a.card.main p{color:inherit;opacity:.8}
+  .t{font-weight:600;font-size:15px;margin:0 0 4px}
+  .card p{margin:0;color:var(--muted-foreground);font-size:13px;line-height:18px}
+  .card p.t{color:inherit;font-size:15px;line-height:20px;margin:0 0 4px}
+  .note{margin-top:40px;padding:14px 16px;border-radius:var(--radius);background:var(--tint);
+        color:var(--muted-foreground);font-size:13px;line-height:19px}
+</style>
+</head>
+<body>
+<main>
+  <p class="logo">Shelfcall</p>
+  <h1>Ask for a book. A real shop answers.</h1>
+  <p class="sub">A clickable prototype of the reverse marketplace for books in Yerevan. Everything runs in your browser with sample data. Nothing is saved, and reloading a page starts it over.</p>
+
+  <h2>Try it</h2>
+  <div class="grid">
+    <a class="card main" href="all-roles.html"><p class="t">All roles</p><p>Every side of the market, with a switcher in the top bar.</p></a>
+    <a class="card" href="empty.html"><p class="t">Empty, for testing</p><p>Nothing filled in. Post a request, answer it as a shop, deliver it.</p></a>
+  </div>
+
+  <h2>One role at a time</h2>
+  <div class="grid">
+    <a class="card" href="reader.html"><p class="t">Reader</p><p>You are Dina, asking for books.</p></a>
+    <a class="card" href="seller.html"><p class="t">Bookseller</p><p>You are Aram Books, two branches.</p></a>
+    <a class="card" href="courier.html"><p class="t">Courier</p><p>You are Vahe, delivering and collecting cash.</p></a>
+    <a class="card" href="admin.html"><p class="t">Admin</p><p>The Shelfcall team: shops, requests, orders.</p></a>
+  </div>
+
+  <h2>Documents</h2>
+  <div class="grid">
+    <a class="card" href="docs/spec.html"><p class="t">MVP spec</p><p>Stories, flows, screens, data model, decisions.</p></a>
+    <a class="card" href="docs/audit.html"><p class="t">Audit</p><p>Edge cases and their status.</p></a>
+    <a class="card" href="docs/supply-test.html"><p class="t">Supply test</p><p>The two-week bookseller test.</p></a>
+  </div>
+
+  <p class="note">Prototype only: no server, no accounts, no payments. Names, phone numbers and shops are sample data.</p>
+</main>
+</body>
+</html>

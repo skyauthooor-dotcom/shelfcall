@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex">
+</head>
+<body>
+<title>Shelfcall Audit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+<style>
+  :root{
+    --paper:#f1f4f4; --surface:#ffffff; --surface-2:#e7ecec;
+    --ink:#15222a; --ink-2:#44585f; --ink-3:#6f858c;
+    --line:#d2dadb; --line-soft:#e4e9e9;
+    --stop:#9d3a2c; --stop-soft:#f7e6e2;
+    --warn:#8a5c17; --warn-soft:#f5ecda;
+    --go:#1a6754; --go-soft:#e1efe9;
+    --shadow:0 1px 2px rgba(21,34,42,.06), 0 10px 24px -18px rgba(21,34,42,.35);
+    --sans:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    --serif:"Newsreader", Georgia, serif;
+    --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme: dark;
+      --paper:#0f1519; --surface:#161f24; --surface-2:#1f2930;
+      --ink:#e6eded; --ink-2:#a6babf; --ink-3:#7d959b;
+      --line:#2b383f; --line-soft:#223038;
+      --stop:#e08d7c; --stop-soft:#2f1c18;
+      --warn:#d9ad5e; --warn-soft:#2c2415;
+      --go:#52bb9f; --go-soft:#122b25;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 24px -18px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --paper:#0f1519; --surface:#161f24; --surface-2:#1f2930;
+    --ink:#e6eded; --ink-2:#a6babf; --ink-3:#7d959b;
+    --line:#2b383f; --line-soft:#223038;
+    --stop:#e08d7c; --stop-soft:#2f1c18;
+    --warn:#d9ad5e; --warn-soft:#2c2415;
+    --go:#52bb9f; --go-soft:#122b25;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 24px -18px rgba(0,0,0,.8);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1020px;margin:0 auto;padding-inline:20px;padding-block:0 72px}
+  .mast{padding-block:44px 26px;border-bottom:1px solid var(--line)}
+  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin:0 0 14px}
+  h1{font-family:var(--serif);font-weight:500;font-size:clamp(32px,5.5vw,48px);line-height:1.05;letter-spacing:-.015em;margin:0 0 14px;text-wrap:balance}
+  .lede{font-family:var(--serif);font-size:clamp(17px,2.4vw,20px);line-height:1.5;color:var(--ink-2);max-width:62ch;margin:0}
+  nav.toc{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:color-mix(in srgb, var(--paper) 92%, transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .toc-inner{max-width:1020px;margin:0 auto;padding-inline:20px;display:flex;gap:4px;overflow-x:auto;scrollbar-width:thin}
+  .toc a{flex:none;text-decoration:none;font-size:13px;font-weight:500;color:var(--ink-2);padding:12px 10px;border-bottom:2px solid transparent;white-space:nowrap}
+  .toc a:hover{color:var(--ink)}
+  .toc a.on{color:var(--ink);border-bottom-color:var(--ink)}
+  section{padding-block:42px 8px;scroll-margin-top:64px}
+  .sec-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+  .sec-num{font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+  h2{font-family:var(--serif);font-weight:500;font-size:clamp(24px,3.4vw,32px);letter-spacing:-.01em;margin:0}
+  .sec-note{color:var(--ink-2);max-width:66ch;margin:0 0 24px}
+  h3{font-size:14px;font-weight:600;margin:30px 0 12px}
+  h3:first-of-type{margin-top:0}
+  p{max-width:70ch}
+
+  .tag{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;padding:3px 7px;border-radius:3px;background:var(--surface-2);color:var(--ink-2)}
+  .tag.stop{background:var(--stop-soft);color:var(--stop)}
+  .tag.warn{background:var(--warn-soft);color:var(--warn)}
+  .tag.go{background:var(--go-soft);color:var(--go)}
+  .tag.ghost{background:transparent;border:1px solid var(--line);color:var(--ink-3)}
+
+  /* edge case cards */
+  .case{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 20px;margin-bottom:12px;box-shadow:var(--shadow)}
+  .case.sev1{border-left:3px solid var(--stop)}
+  .case.sev2{border-left:3px solid var(--warn)}
+  .case.sev3{border-left:3px solid var(--line)}
+  .case-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+  .case-head .id{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+  .case-head b{font-size:15px}
+  .case .what{margin:0 0 10px;color:var(--ink-2);font-size:14px}
+  .case .now, .case .fix{font-size:13.5px;margin:0;padding-left:16px;position:relative;color:var(--ink-2)}
+  .case .now{margin-bottom:6px}
+  .case .now::before, .case .fix::before{position:absolute;left:0;font-family:var(--mono);font-size:11px;top:2px}
+  .case .now::before{content:"\2717";color:var(--stop)}
+  .case .fix::before{content:"\2192";color:var(--go)}
+  .case .fix b{color:var(--ink)}
+  td.fixed{color:var(--ink-2)}
+  td.fixed::before{content:"\2713 ";color:var(--go);font-family:var(--mono)}
+  .case .st{font-size:13px;margin:10px 0 0;padding:8px 11px;border-radius:6px;border:1px solid var(--line)}
+  .case .st b{font-family:var(--mono);font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+  .case .st.built{border-color:var(--go);color:var(--ink-2)}
+  .case .st.built b{color:var(--go)}
+  .case .st.part{border-color:var(--warn);color:var(--ink-2)}
+  .case .st.part b{color:var(--warn)}
+  .case .st.open{border-color:var(--stop);color:var(--ink-2)}
+  .case .st.open b{color:var(--stop)}
+
+  .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:16px}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 20px}
+  .panel h4{margin:0 0 10px;font-size:14px}
+  .panel ul{margin:0;padding-left:16px;font-size:13.5px;color:var(--ink-2)}
+  .panel li{margin-bottom:7px}
+  .panel li::marker{color:var(--ink-3)}
+  .panel li b{color:var(--ink)}
+
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+  table{border-collapse:collapse;width:100%;min-width:600px;font-size:13.5px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  th{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);font-weight:400}
+  tr:last-child td{border-bottom:none}
+  td code{font-family:var(--mono);font-size:12px;color:var(--ink-2)}
+  code{font-family:var(--mono);font-size:12.5px}
+
+  ol.steps{counter-reset:s;list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:14px}
+  ol.steps li{position:relative;padding-left:34px;font-size:14px;color:var(--ink-2)}
+  ol.steps li::before{counter-increment:s;content:counter(s);position:absolute;left:0;top:-1px;width:23px;height:23px;border-radius:50%;background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:11px;display:flex;align-items:center;justify-content:center}
+  ol.steps li b{color:var(--ink)}
+
+  footer{border-top:1px solid var(--line);margin-top:48px;padding-top:22px;font-size:13px;color:var(--ink-3)}
+  @media (max-width:520px){.wrap{padding-inline:16px}.toc-inner{padding-inline:16px}}
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<nav class="toc">
+  <div class="toc-inner">
+    <a href="#stuck">Stuck states</a>
+    <a href="#money">Money</a>
+    <a href="#trust">Trust &amp; privacy</a>
+    <a href="#gaps">Flow &amp; story gaps</a>
+    <a href="#model">Data model</a>
+    <a href="#first">Do these first</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <header class="mast">
+    <p class="kicker">Shelfcall · design audit · before M1</p>
+    <h1>What Breaks</h1>
+    <p class="lede">Sixteen edge cases the current design cannot survive, the places where the flows and stories now contradict the prototypes, and what the data model needs before you can tell what the system is doing — let alone correct it.</p>
+    <p class="lede" style="font-size:15px">Each case now carries its status. <b>Eleven are built and clickable</b> in the prototype; one is half built and waiting on a server; four are deliberate decisions or jobs too small to reach without the real thing. The drift table below is closed — the spec is v0.3 and matches the build.</p>
+  </header>
+
+  <!-- ============ STUCK ============ -->
+  <section id="stuck">
+    <div class="sec-head"><span class="sec-num">01</span><h2>Orders that get stuck</h2></div>
+    <p class="sec-note">Every one of these leaves a real book, a real person and sometimes real cash in a state the app has no way out of. They are the most alarming because nobody notices until someone complains.</p>
+
+    <div class="case sev1">
+      <div class="case-head"><span class="id">E1</span><b>The shop confirms, then sells the book over the counter</b><span class="tag stop">stuck</span><span class="tag warn">money</span></div>
+      <p class="what">A walk-in customer buys the same copy an hour after the shop confirmed the order. The courier arrives to collect nothing, or the reader turns up to an empty counter.</p>
+      <p class="now">There is no seller cancel after confirming. The reader can only cancel while the order is <code>PLACED</code>. The sub-order is frozen.</p>
+      <p class="fix"><b>Seller can cancel a confirmed order</b> with a reason, up to the moment of handover. Reader notified, request reopens, its released offers come back. Count these per shop — a shop that does it often is overselling.</p>
+      <p class="st built"><b>Built.</b> The reason-first block <i>I cannot do this one</i> is on the seller’s order page through PLACED and READY, and through SHIPPED for an uncollected pickup. Reversal is exact — see E5.</p>
+    </div>
+
+    <div class="case sev1">
+      <div class="case-head"><span class="id">E2</span><b>The courier cannot deliver</b><span class="tag stop">stuck</span><span class="tag warn">money</span></div>
+      <p class="what">Nobody home, wrong address, phone off, or the buyer refuses on the doorstep. If the shop was paid at pickup, the courier is holding a book <i>and</i> is out of pocket.</p>
+      <p class="now">Not modelled at all. The job stays in <b>On you</b> forever and the order never completes, so the sale is never credited and the commission never accrues.</p>
+      <p class="fix"><b>A third courier action: could not deliver</b>, with a reason (no answer / refused / wrong address). It returns the book to the shop, cancels the sub-order, and — when the shop was already paid — opens a <b>refund to the courier</b> line so the float reconciles.</p>
+      <p class="st built"><b>Built.</b> <i>Could not deliver</i>, with three reasons, on the job card. The book goes back to the shop, the sub-order cancels, the request reopens, and a shop already paid at pickup opens a refund the office owes the courier.</p>
+    </div>
+
+    <div class="case sev1">
+      <div class="case-head"><span class="id">E3</span><b>The reader never collects a pickup</b><span class="tag stop">stuck</span></div>
+      <p class="what">The book sits behind the counter, off the shelf, for weeks. The code is never entered, so no sale is recorded and the shop is holding stock for nobody.</p>
+      <p class="now">No expiry on <code>READY FOR PICKUP</code>. The shop has no way to release it and no way to tell the app it gave up.</p>
+      <p class="fix"><b>A pickup window — seven days is a sane default</b>, warned at day five. Then the shop can release it in one tap: sub-order cancelled, book back on the shelf, request reopened. Record it as reader-side non-collection, not a seller fault.</p>
+      <p class="st built"><b>Built, shorter.</b> Three days, not seven — a book off the shelf for a week is a week of dead stock. The shop releases it in one tap and the copy says whether the window has passed. The state is derived from <code>ready_at</code>; the reminder itself is a scheduled task.</p>
+    </div>
+
+    <div class="case sev1">
+      <div class="case-head"><span class="id">E4</span><b>Nothing actually runs the clocks</b><span class="tag stop">stuck</span><span class="tag ghost">systemic</span></div>
+      <p class="what">The design leans on a dozen timed transitions: the confirm nudge and the auto-cancel after it, the 24 h / 72 h / 30-day silence ladder, each shop’s statement on its own anniversary day, restriction that evening — plus the pickup window above.</p>
+      <p class="now">None of them are specified as jobs. In the prototypes they are computed on render, which hides the problem: in a real system, if the job does not fire, the state never changes and nobody is told.</p>
+      <p class="fix"><b>One scheduled-jobs table</b> with name, schedule, last_run_at, last_error, rows_touched. If a job has not run today, that is visible on the ops page. Without this, a silent cron failure looks exactly like a quiet week.</p>
+      <p class="st part"><b>Half built.</b> The rule is settled and written down: <b>derive for display, queue for consequence</b>. Four of the clocks are read-time queries that cannot silently fail — the 72-hour fallback pool, the 24-hour review edit, the free month and the payment overdue check. The rest produce a consequence and need one <code>ScheduledTask</code> table and one worker: specified in the model, not yet built, because a prototype has no server. The auto-cancel is one of them, and it is now settled as <b>the end of the next open day</b> rather than a count of open hours — a shop that shuts early loses no time it was never open for, and both sides can be told a date instead of watching a counter.</p>
+    </div>
+
+    <div class="case sev2">
+      <div class="case-head"><span class="id">E5</span><b>Cancelling revives offers that should stay dead</b><span class="tag warn">correctness</span></div>
+      <p class="what">Ordering closes every other offer on the request as <i>not chosen</i>. Cancelling the order reopens the request and revives them — including offers the reader had declined earlier, and offers whose seller has since removed the book.</p>
+      <p class="now">The reversal matches on status alone. An offer has no memory of <i>why</i> it closed.</p>
+      <p class="fix"><b><code>closed_by_order_id</code> and <code>closed_reason</code> on every offer.</b> Reversal revives only the offers closed by <i>this</i> order, and never one the seller removed in the meantime.</p>
+      <p class="st built"><b>Built.</b> <code>closed_by_order_id</code> and <code>closed_reason</code> on every offer. A cancel revives only what that order closed; a copy the seller removed in the meantime stays dead. Verified by click-through.</p>
+    </div>
+
+    <div class="case sev2">
+      <div class="case-head"><span class="id">E6</span><b>Two readers order the same physical copy</b><span class="tag warn">trust</span></div>
+      <p class="what">One Frankenstein offered to three requests. Two readers order within the same hour. The same-copy prompt only appears <i>after</i> the first confirmation, which is too late.</p>
+      <p class="now">The shop must decline one order. Declining is currently framed as a failure and the reader is simply told no.</p>
+      <p class="fix">Keep the prompt, but add the honest release valve: <b>a decline reason of “already sold” that costs the shop nothing</b>, an apology to the reader that reopens the request automatically, and a count watched internally. Optionally let a seller mark an offer as <b>one copy only</b>, so the app can warn at order time rather than after.</p>
+      <p class="st built"><b>Built.</b> The same-copy prompt now fires on a <b>title match</b> only, and names the book. <i>Sold in the shop</i> is the first exit reason, and costs the shop nothing.</p>
+    </div>
+
+    <div class="case sev3">
+      <div class="case-head"><span class="id">E7</span><b>A location is retired with orders in flight</b><span class="tag ghost">minor</span></div>
+      <p class="what">Retiring a branch checks for live offers but not for confirmed sub-orders that name it. The courier is sent to an address the shop has closed.</p>
+      <p class="fix">Block retirement while any sub-order at that location is not finished, and say how many.</p>
+      <p class="st open"><b>Still open.</b> Retirement still checks live offers only. Small, and unreachable in the prototype — do it with the real settings screen.</p>
+    </div>
+  </section>
+
+  <!-- ============ MONEY ============ -->
+  <section id="money">
+    <div class="sec-head"><span class="sec-num">02</span><h2>Where the money leaks</h2></div>
+    <p class="sec-note">Cash plus a manual ledger is workable at ten shops. Each of these is the specific way it stops being workable.</p>
+
+    <div class="case sev1">
+      <div class="case-head"><span class="id">E8</span><b>Only the courier says the shop was paid</b><span class="tag stop">money</span></div>
+      <p class="what">The courier taps “paid the shop” and the ledger clears. The shop is never asked to confirm it received anything.</p>
+      <p class="now">One-sided record. A disagreement three weeks later has no second source, and the courier is an employee, so the loss is yours either way.</p>
+      <p class="fix"><b>Two-sided settlement:</b> the courier marks it paid, the shop gets a one-tap <i>received</i> on their orders screen. Unmatched pairs older than a day are the ops page's first list.</p>
+      <p class="st built"><b>Built.</b> Two-sided: the courier marks it paid, and the shop gets <i>Yes, I got it</i> / <i>No, I did not</i> on their orders screen. Unmatched pairs are the ops page’s first list.</p>
+    </div>
+
+    <div class="case sev1">
+      <div class="case-head"><span class="id">E9</span><b>Cash state is stored as booleans, not entries</b><span class="tag stop">money</span><span class="tag ghost">model</span></div>
+      <p class="what">Today: <code>paidShop: true</code>, <code>settled: true</code>. Totals are derived by looping and summing.</p>
+      <p class="now">You cannot answer <i>when</i>, <i>how much</i>, <i>who recorded it</i>, or <i>what changed since yesterday</i>. You cannot correct a mistake without overwriting the only copy of the truth.</p>
+      <p class="fix"><b>A cash ledger of rows</b> — see §05. Every movement is an entry: buyer → courier, courier → shop, courier → office, office → courier (refunds). Corrections are new reversing entries, never edits.</p>
+      <p class="st built"><b>Built.</b> Cash is rows now — <code>{at, amount, from, to, sub, note, pending}</code> — and every figure on both money screens is a sum over them. No <code>paid_shop</code> boolean survives. Money owed and money held are different things: a refund the office promises is <code>pending</code> until someone marks it received.</p>
+    </div>
+
+    <div class="case sev2">
+      <div class="case-head"><span class="id">E10</span><b>A completed order that went wrong still bills the shop</b><span class="tag warn">money</span><span class="tag warn">trust</span></div>
+      <p class="what">The book arrives water-damaged, or is the wrong edition. The order is already <code>COMPLETED</code>, so it counts towards the rating, the order count and the statement.</p>
+      <p class="now">There are no returns in v1, and no state between completed and disputed. The reader's only recourse is a bad review; the shop is charged regardless.</p>
+      <p class="fix">You do not need refunds in v1, but you do need <b>a dispute flag on a completed sub-order</b> that holds its commission line out of the statement until an operator resolves it. The flag already exists on the statement side — give the reader a way to raise it.</p>
+      <p class="st built"><b>Built.</b> The reader can raise a problem on a completed order, reason first. The line is held out of the shop’s statement until an operator resolves it.</p>
+    </div>
+
+    <div class="case sev2">
+      <div class="case-head"><span class="id">E11</span><b>Restriction does not stop an unpaid shop earning</b><span class="tag warn">policy</span></div>
+      <p class="what">A restricted shop keeps every live offer, and those offers can still be ordered for weeks. Restriction only blocks <i>new</i> requests reaching them.</p>
+      <p class="fix">A deliberate choice, not a bug — but decide it explicitly. Letting old offers convert is the humane version and keeps readers served; it also means a shop can ignore a statement for a month with little pain. Consider pausing a restricted shop's offers after a second unpaid statement.</p>
+      <p class="st open"><b>Decided, not built.</b> Old offers keep converting. It is the humane version and it keeps readers served. Revisit if a shop ignores a second statement — not before.</p>
+    </div>
+
+    <div class="case sev3">
+      <div class="case-head"><span class="id">E12</span><b>A second account is a second free month</b><span class="tag ghost">policy</span></div>
+      <p class="what">Nothing ties a shop account to a real shop. The cheapest way to never pay 12% is to re-register every 30 days.</p>
+      <p class="fix">At ten shops you will notice by name. Before you have fifty, tie the account to something re-usable-once: a phone number, a tax id, or an operator's manual approval on first payout.</p>
+      <p class="st open"><b>Still open.</b> At ten shops you notice by name. Tie the account to a phone number or a tax id before fifty.</p>
+    </div>
+  </section>
+
+  <!-- ============ TRUST ============ -->
+  <section id="trust">
+    <div class="sec-head"><span class="sec-num">03</span><h2>Trust and privacy</h2></div>
+
+    <div class="case sev2">
+      <div class="case-head"><span class="id">E13</span><b>The buyer's phone and address go out and never come back</b><span class="tag warn">privacy</span></div>
+      <p class="what">On confirmation the shop sees the reader's name, phone and address; the courier sees them too. If the order is then cancelled or declined, the details have already been handed over.</p>
+      <p class="fix">Accept it for v1 — a courier genuinely needs an address — but state it: <b>details are released at confirmation and cannot be recalled</b>, show the reader that this is what confirmation means, and keep the release stamped in the event log so you can answer a complaint.</p>
+      <p class="st built"><b>Built, and tightened.</b> Details are now released at <b>ready</b>, not at confirm — later than before, and only once a shop has committed a copy. The order page says so rather than showing an empty field. Still irrevocable once out.</p>
+    </div>
+
+    <div class="case sev2">
+      <div class="case-head"><span class="id">E14</span><b>The reader can complete an order that never happened</b><span class="tag warn">money</span></div>
+      <p class="what">“I have it — mark as received” is available to the reader on any shipped order. Tapping it completes the sale, credits the shop and charges commission, whether or not a book changed hands.</p>
+      <p class="now">It exists as a fallback for when the shop or courier forgets. But it is a second way to close an order with no counter-signature.</p>
+      <p class="fix">Keep it, and <b>record which party closed it</b> — that field already exists. Then watch the share of orders closed by the reader alone: a healthy system closes most by code or courier.</p>
+      <p class="st built"><b>Built.</b> <code>closed_by</code> records code, courier or reader on every completed sub-order. Watch the reader-only share.</p>
+    </div>
+
+    <div class="case sev3">
+      <div class="case-head"><span class="id">E15</span><b>A review can be left on an order the seller disputes</b><span class="tag ghost">minor</span></div>
+      <p class="what">Reviews unlock on completion and are final after 24 hours, with no seller reply and no moderation path.</p>
+      <p class="fix">Out of scope is fine, but an operator needs the ability to hide a review pending a dispute. That is an ops-page action and a <code>hidden_at</code> field, not a feature.</p>
+      <p class="st open"><b>Still open.</b> An ops field and an ops action, not a feature. Do it when there is something to moderate.</p>
+    </div>
+
+    <div class="case sev3">
+      <div class="case-head"><span class="id">E16</span><b>Nothing stops an abandoned request filling the feed</b><span class="tag ghost">minor</span></div>
+      <p class="what">The 30-day archive only fires on requests with <b>zero</b> offers. A request with three ignored offers stays open forever.</p>
+      <p class="fix">Archive on reader inactivity as well: no visit and no action for 30 days, offers or not. Tell the reader, and let one tap bring it back.</p>
+      <p class="st open"><b>Still open.</b> The archive still needs the offer count at zero. Add reader inactivity when the scheduled-task worker exists — it is a row in the same table.</p>
+    </div>
+  </section>
+
+  <!-- ============ GAPS ============ -->
+  <section id="gaps">
+    <div class="sec-head"><span class="sec-num">04</span><h2>Where the spec and the prototypes disagree</h2></div>
+    <p class="sec-note">The prototypes moved faster than the written spec. These are the places a developer reading the spec would build the wrong thing — <b>all six are now closed</b>, and the spec is at v0.3. The table is kept because what was wrong, and how it was settled, is worth reading once.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Spec said</th><th>The build does</th><th>How it was settled</th></tr></thead>
+        <tbody>
+          <tr><td><b>US-34</b> — the shop marks a courier order <i>Ready for the courier</i> as a separate step after confirming</td><td>Confirming a courier order makes it ready immediately; there is no second tap</td><td class="fixed">Closed. <code>CONFIRMED</code> is gone from both paths, and the one action is <i>Ready for delivery</i> — a physical claim, not an acknowledgement. US-23, US-34 and §04 rewritten.</td></tr>
+          <tr><td><b>US-24</b> — status moves confirmed → shipped / ready for pickup</td><td>Two different paths: pickup keeps a <i>put aside</i> step, courier goes confirm → ready → collected</td><td class="fixed">Closed differently. Rather than splitting it, US-24 became the story that was missing: <b>the shop pulling out after saying ready</b>. Pickup and delivery now share one action and differ only in the state it lands in.</td></tr>
+          <tr><td><b>US-14</b> — the seller <i>withdraws</i> an offer</td><td>Called <b>Remove</b>, asks a reason, and the whole offer is editable, not just the price</td><td class="fixed">Closed. US-14 says Remove, asks a reason, and covers editing every field.</td></tr>
+          <tr><td><b>US-27</b> — notification list covers readers and sellers</td><td>Couriers get notifications too, and every notification opens the exact object</td><td class="fixed">Closed. US-27 carries the courier's three notifications and the rule that every order notification opens that order's own page.</td></tr>
+          <tr><td>Offer form: one screen</td><td>Two steps, plus a third “sent” step, plus <i>send and add another</i>, plus reuse of a previously listed book</td><td class="fixed">Closed, and the flow changed underneath it: books are now composed into one offer — <i>fill a book, add another, send</i> — and US-12 describes the basket. Reuse of a previously listed book is part of the same form.</td></tr>
+          <tr><td>No story exists</td><td>Seller settings: locations, courier fee, pay direction, keyword alerts</td><td class="fixed">Pay direction has US-39. Locations and alerts are still thin in US-03 — the smallest thing left on this page, and harmless.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Stories that do not exist and need to</h3>
+    <div class="grid2">
+      <div class="panel">
+        <h4>Recovery</h4>
+        <ul>
+          <li><b>Seller cancels after confirming</b> (E1) — reason, notification, request reopens</li>
+          <li><b>Courier could not deliver</b> (E2) — return to shop, cancel, refund the float</li>
+          <li><b>Pickup not collected</b> (E3) — window, warning, shop releases it</li>
+          <li><b>Reader raises a problem</b> on a completed order (E10) — holds the commission line</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h4>Operations</h4>
+        <ul>
+          <li><b>Scheduled jobs</b> (E4) — what runs, when, and what is visible when one fails</li>
+          <li><b>Two-sided settlement</b> (E8) — the shop confirms the courier's cash</li>
+          <li><b>Operator corrections</b> — any state change reversible by hand, and logged</li>
+          <li><b>Metrics</b> — the supply-test numbers computed from live data rather than a spreadsheet</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MODEL ============ -->
+  <section id="model">
+    <div class="sec-head"><span class="sec-num">05</span><h2>What the data model needs to be steerable</h2></div>
+    <p class="sec-note">The current model stores <i>the present</i>: a status field and a few booleans. That is enough to render a screen and nothing else. To run the business you need to answer three questions — what happened, why is this stuck, and what changed since yesterday — and to fix a wrong state without destroying the evidence.</p>
+
+    <h3>The four things missing</h3>
+    <div class="grid2">
+      <div class="panel">
+        <h4>1 · An append-only event log</h4>
+        <ul>
+          <li>Every state change as a row: <code>at</code>, <code>actor_id</code>, <code>actor_role</code>, <code>entity</code>, <code>entity_id</code>, <code>from_state</code>, <code>to_state</code>, <code>reason</code>, <code>source</code> (app | job | operator).</li>
+          <li>This is what turns “why is order 1042 stuck” from guesswork into a query.</li>
+          <li>It is also the only way an operator correction is distinguishable from a user action.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h4>2 · A cash ledger, not booleans</h4>
+        <ul>
+          <li>One row per movement: <code>amount</code>, <code>from_party</code>, <code>to_party</code>, <code>sub_order_id</code>, <code>at</code>, <code>recorded_by</code>, <code>confirmed_by</code>.</li>
+          <li>Parties: buyer, shop, courier, office.</li>
+          <li>Corrections are reversing entries. Nothing is ever edited.</li>
+          <li>The courier's float, the shop's share and the office's fees all become sums over this table rather than three separate derived numbers that can disagree.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h4>3 · Timestamps and reasons on everything</h4>
+        <ul>
+          <li>Not <code>status</code> alone: <code>placed_at</code>, <code>confirmed_at</code>, <code>ready_at</code>, <code>collected_at</code>, <code>delivered_at</code>, <code>completed_at</code>, <code>cancelled_at</code>.</li>
+          <li>Every terminal state carries an enum reason. Free text is a note, never the record.</li>
+          <li><code>closed_by_order_id</code> on offers, so reversal is exact (E5).</li>
+          <li><code>version</code> on an offer, held by the cart line — “price changed since you added it” becomes precise instead of a comparison of two numbers.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h4>4 · Nothing is ever deleted</h4>
+        <ul>
+          <li><code>retired_at</code> on locations, <code>removed_at</code> on offers, <code>hidden_at</code> on reviews.</li>
+          <li>A shop that retires a branch must not orphan the orders and statements that reference it.</li>
+          <li>Soft delete plus the event log is what lets you rebuild any screen as it looked last Tuesday — which is what a disputed statement actually requires.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>The numbers the app should compute, so the spreadsheet can retire</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Measure</th><th>From</th><th>What it tells you</th></tr></thead>
+        <tbody>
+          <tr><td>Time to first offer</td><td><code>offer.sent_at − request.posted_at</code>, median</td><td>The single most predictive supply number</td></tr>
+          <tr><td>Answered within 72 h</td><td>requests with ≥1 offer / all requests</td><td>Whether demand is reaching supply at all</td></tr>
+          <tr><td>Offers per sale, per shop</td><td>offers sent ÷ offers sold</td><td>Whether answering is worth a shop's five minutes (§ the arithmetic that decides the product)</td></tr>
+          <tr><td>Open vs specific answer rate</td><td>split by <code>request.kind</code></td><td>Whether the vague half of the product works</td></tr>
+          <tr><td>Still answering in week N</td><td>offers per shop per week</td><td>Novelty versus real demand</td></tr>
+          <tr><td>Closed by code / courier / reader</td><td><code>sub_order.closed_by</code></td><td>How much of the loop is actually being verified (E14)</td></tr>
+          <tr><td>Cancel and decline rates, by reason</td><td>enum reasons</td><td>Overselling, stale offers, delivery failures — each has a different fix</td></tr>
+          <tr><td>Float age</td><td>unsettled ledger entries by day</td><td>Whether the cash model is still under control</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ FIRST ============ -->
+  <section id="first">
+    <div class="sec-head"><span class="sec-num">06</span><h2>If you only do five things</h2></div>
+    <p class="sec-note">Ordered by damage prevented per hour of work. The first three are cheap and stop real harm; the last two are the difference between a system you run and one that runs you.</p>
+
+    <ol class="steps">
+      <li><b>Give every stuck state an exit.</b> Seller cancels after confirming, courier could not deliver, pickup expires. Three actions, each with a reason, each reopening the request. Without them, your first bad week produces orders nobody can close.</li>
+      <li><b>Add <code>closed_by_order_id</code> and enum reasons</b> to offers and sub-orders. Small schema change, removes a whole class of wrong-state bugs, and makes every later metric possible.</li>
+      <li><b>Make settlement two-sided.</b> The shop taps <i>received</i>. One button, and the cash model stops resting on a single person's memory.</li>
+      <li><b>Replace the cash booleans with a ledger table</b> before the first real delivery. Retrofitting a ledger over historical booleans is painful; starting with one costs nothing.</li>
+      <li><b>Write the event log from day one</b>, even if nothing reads it yet. It is the cheapest thing on this list to add now and the most expensive to add later, and it is what makes the ops page able to <i>correct</i> rather than just observe.</li>
+    </ol>
+
+    <div class="panel" style="margin-top:22px">
+      <h4>What I would deliberately not fix yet</h4>
+      <ul>
+        <li>Returns and refunds — the dispute flag (E10) is enough until someone actually needs money back.</li>
+        <li>Phone masking (E13) — a courier needs a real number; say so plainly instead of building indirection.</li>
+        <li>Review moderation (E15) — one operator field, not a feature.</li>
+        <li>Duplicate-account prevention (E12) — you will recognise ten shops by name.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    Companion to the Shelfcall MVP spec and the three prototypes. Sixteen cases, six spec contradictions, four model additions. Written before M1, which is the only time any of it is cheap.
+  </footer>
+</div>
+
+<script>
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+    var secs = links.map(function(l){ return document.querySelector(l.getAttribute('href')); });
+    function sync(){
+      var y = window.scrollY + 120, cur = 0;
+      secs.forEach(function(s, i){ if (s && s.offsetTop <= y) cur = i; });
+      links.forEach(function(l, i){ l.classList.toggle('on', i === cur); });
+    }
+    window.addEventListener('scroll', sync, {passive:true});
+    sync();
+  })();
+</script>
+
+</body>
+</html>

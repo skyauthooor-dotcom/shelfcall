@@ -1,0 +1,19 @@
+<!-- @dsCard group="Layout" height=140 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+  body{margin:0;padding:20px;font-family:var(--font-sans);background:var(--background);color:var(--foreground)}
+  .wrap{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+  .col{display:flex;flex-direction:column;gap:12px;max-width:520px}
+</style>
+<div class="col">
+  <p style="margin:0;font-size:14px">Books 4 500 ֏</p>
+  <hr data-slot="separator" data-orientation="horizontal">
+  <p style="margin:0;font-size:14px">Delivery 1 000 ֏</p>
+  <div class="wrap" style="height:20px">
+    <span style="font-size:12px;color:var(--muted-foreground)">Mashtots branch</span>
+    <span data-slot="separator" data-orientation="vertical"></span>
+    <span style="font-size:12px;color:var(--muted-foreground)">Mon–Sat 11–19</span>
+    <span data-slot="separator" data-orientation="vertical"></span>
+    <span style="font-size:12px;color:var(--muted-foreground)">pickup free</span>
+  </div>
+</div>
