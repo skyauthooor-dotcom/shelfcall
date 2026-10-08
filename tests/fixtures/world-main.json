@@ -1,0 +1,675 @@
+{
+ "ops": {
+  "ops": {
+   "id": "ops",
+   "name": "Admin"
+  }
+ },
+ "oplog": [],
+ "invoices": [
+  {
+   "id": "st-nairi-0",
+   "seller": "nairi",
+   "from": 1784036277652,
+   "to": 1784059199999,
+   "period": "14 Jul – 14 Jul",
+   "books": 4300,
+   "amount": 516,
+   "issuedAt": 1784091600000,
+   "state": "paid",
+   "paidAt": 1784178000000,
+   "ref": "SC-15-NAIRI"
+  },
+  {
+   "id": "st-nairi-1",
+   "seller": "nairi",
+   "from": 1784059200000,
+   "to": 1786737599999,
+   "period": "15 Jul – 14 Aug",
+   "books": 62400,
+   "amount": 7488,
+   "issuedAt": 1786770000000,
+   "state": "paid",
+   "paidAt": 1786856400000,
+   "ref": "SC-15-NAIRI"
+  }
+ ],
+ "shopApps": [
+  {
+   "id": "tsol",
+   "name": "Tsolak Books",
+   "at": 1791398277652,
+   "state": "waiting",
+   "bio": "Antiquarian and art books, mostly Armenian imprints before 1990.",
+   "email": "tsolak@example.am",
+   "payMode": "after",
+   "avatar": null,
+   "locations": [
+    {
+     "id": "main",
+     "label": "Shop",
+     "addr": "Mashtots 118, Yerevan",
+     "hours": "Mon–Sat 10–19",
+     "pickup": true
+    }
+   ]
+  }
+ ],
+ "couriers": {
+  "vahe": {
+   "id": "vahe",
+   "name": "Vahe",
+   "phone": "+374 77 ** ** **",
+   "onShift": true
+  }
+ },
+ "ledger": [
+  {
+   "at": 1790516277652,
+   "amount": 5200,
+   "from": "courier",
+   "to": "shop",
+   "sub": "1038-A",
+   "note": "handed over, both confirmed",
+   "pending": false
+  }
+ ],
+ "settles": [],
+ "deliveryFee": 1000,
+ "account": {
+  "state": "trial",
+  "trialStart": 1790084277652,
+  "trialAck": null,
+  "billingDay": 15,
+  "lastPeriod": "15 Oct – 14 Nov"
+ },
+ "readers": {
+  "dina": {
+   "id": "dina",
+   "name": "Dina",
+   "city": "Yerevan",
+   "phone": "+374 91 ** ** **",
+   "address": "Komitas 24, apt 7"
+  },
+  "sergey": {
+   "id": "sergey",
+   "name": "Sergey",
+   "city": "Yerevan"
+  },
+  "anna": {
+   "id": "anna",
+   "name": "Anna",
+   "city": "Yerevan"
+  },
+  "lusine": {
+   "id": "lusine",
+   "name": "Lusine",
+   "city": "Yerevan"
+  }
+ },
+ "sellers": {
+  "aram": {
+   "id": "aram",
+   "email": "accounts@arambooks.am",
+   "joined": 1789738677652,
+   "name": "Aram Books",
+   "since": "2026",
+   "orders": 0,
+   "avatar": null,
+   "bio": "Second-hand shop near Mashtots. Strong on Russian classics, art books and 70s–90s translations.",
+   "locations": [
+    {
+     "id": "mash",
+     "label": "Mashtots branch",
+     "addr": "Mashtots 41, Yerevan",
+     "hours": "Mon–Sat 11–19",
+     "pickup": true
+    },
+    {
+     "id": "tum",
+     "label": "Tumanyan branch",
+     "addr": "Tumanyan 12, Yerevan",
+     "hours": "Sat 11–19",
+     "pickup": true
+    }
+   ],
+   "payMode": "after",
+   "reviews": [
+    {
+     "by": "Dina",
+     "stars": 5,
+     "when": "2 weeks ago",
+     "text": "Exactly the edition I hoped for, wrapped in paper. Handed over next day."
+    },
+    {
+     "by": "Sergey",
+     "stars": 4,
+     "when": "1 month ago",
+     "text": "Book as described. Had to wait two days before it was ready."
+    }
+   ]
+  },
+  "nairi": {
+   "id": "nairi",
+   "email": "nairi.stall@example.am",
+   "joined": 1781271477652,
+   "trialStart": 1781444277652,
+   "name": "Nairi",
+   "since": "2026",
+   "orders": 0,
+   "avatar": null,
+   "missed": [
+    "r6"
+   ],
+   "bio": "Small stall, mostly English paperbacks and Penguin editions.",
+   "locations": [
+    {
+     "id": "tum12",
+     "label": "Tumanyan 12",
+     "addr": "Tumanyan 12, Yerevan",
+     "hours": "Sat 11–19",
+     "pickup": true
+    }
+   ],
+   "payMode": "onpickup",
+   "reviews": [
+    {
+     "by": "Lusine",
+     "stars": 5,
+     "when": "3 weeks ago",
+     "text": "Cheapest of the three offers and the book was fine."
+    }
+   ]
+  },
+  "grigor": {
+   "id": "grigor",
+   "email": "grigor@example.am",
+   "joined": 1786801077652,
+   "trialStart": 1787060277652,
+   "name": "Grigor Books",
+   "since": "2026",
+   "orders": 0,
+   "avatar": null,
+   "missed": [
+    "r6"
+   ],
+   "bio": "Online only. Science fiction, mostly Soviet-era printings.",
+   "locations": [
+    {
+     "id": "wh",
+     "label": "Warehouse",
+     "addr": "Arshakunyats 8, Yerevan",
+     "hours": "Mon–Fri 10–18",
+     "pickup": false
+    }
+   ],
+   "payMode": "after",
+   "reviews": []
+  }
+ },
+ "requests": [
+  {
+   "id": "r1",
+   "reader": "dina",
+   "kind": "open",
+   "text": "I'm wondering about a book with a crazy scientist — fiction, not too heavy. Something I could read in a week.",
+   "budget": 6000,
+   "city": "Yerevan",
+   "cond": "used",
+   "posted": 1790689077652,
+   "status": "open"
+  },
+  {
+   "id": "r2",
+   "reader": "dina",
+   "kind": "concrete",
+   "text": "Master and Margarita — the 1988 edition, or anything close to it.",
+   "title": "Master and Margarita",
+   "author": "Mikhail Bulgakov",
+   "budget": 8000,
+   "city": "Yerevan",
+   "cond": "any",
+   "posted": 1791034677652,
+   "status": "open"
+  },
+  {
+   "id": "r3",
+   "reader": "dina",
+   "kind": "concrete",
+   "text": "Anything by Sei Shōnagon. The Pillow Book ideally, any translation.",
+   "title": "The Pillow Book",
+   "author": "Sei Shōnagon",
+   "budget": 12000,
+   "city": "Yerevan",
+   "cond": "any",
+   "posted": 1791272277652,
+   "status": "open"
+  },
+  {
+   "id": "r4",
+   "reader": "sergey",
+   "kind": "open",
+   "text": "Something like Borges but easier going. Short stories, a bit strange, nothing too dense.",
+   "budget": 5000,
+   "city": "Yerevan",
+   "cond": "used",
+   "posted": 1791455877652,
+   "status": "open"
+  },
+  {
+   "id": "r5",
+   "reader": "anna",
+   "kind": "concrete",
+   "text": "Norwegian Wood, any edition, English or Russian.",
+   "title": "Norwegian Wood",
+   "author": "Haruki Murakami",
+   "budget": 4500,
+   "city": "Yerevan",
+   "cond": "used",
+   "posted": 1791373077652,
+   "status": "open"
+  },
+  {
+   "id": "r6",
+   "reader": "lusine",
+   "kind": "open",
+   "text": "Art books about Armenian miniatures — the older the printing the better.",
+   "budget": 20000,
+   "city": "Yerevan",
+   "cond": "any",
+   "posted": 1791121077652,
+   "status": "open",
+   "seenBy": {
+    "aram": 1791207477652,
+    "nairi": 1791207477652,
+    "grigor": 1791293877652
+   }
+  },
+  {
+   "id": "rh1",
+   "reader": "sergey",
+   "kind": "concrete",
+   "text": "Anna Karenina, a Soviet printing.",
+   "title": "Anna Karenina",
+   "author": "Lev Tolstoy",
+   "budget": 6000,
+   "city": "Yerevan",
+   "cond": "any",
+   "posted": 1790170677652,
+   "status": "fulfilled",
+   "review": "passed",
+   "exp": 1,
+   "seenBy": {
+    "aram": 1790233089460
+   }
+  },
+  {
+   "id": "rh2",
+   "reader": "anna",
+   "kind": "concrete",
+   "text": "Norwegian Wood, any edition, English or Russian.",
+   "title": "Norwegian Wood",
+   "author": "Haruki Murakami",
+   "budget": 8000,
+   "city": "Yerevan",
+   "cond": "any",
+   "posted": 1790429877652,
+   "status": "fulfilled",
+   "review": "passed",
+   "exp": 1,
+   "seenBy": {
+    "aram": 1790447271398,
+    "nairi": 1790466092710
+   }
+  }
+ ],
+ "offers": [
+  {
+   "id": "o1",
+   "req": "r1",
+   "seller": "aram",
+   "loc": "mash",
+   "title": "Frankenstein",
+   "author": "Mary Shelley",
+   "year": 1979,
+   "pub": "Progress",
+   "pages": 312,
+   "cond": "used",
+   "price": 4500,
+   "note": "Spine slightly faded, pages clean, no marks. From a 1979 Moscow print run.",
+   "status": "sent",
+   "sent": 1790775477652
+  },
+  {
+   "id": "o2",
+   "req": "r1",
+   "seller": "nairi",
+   "loc": "tum12",
+   "title": "Dr Jekyll and Mr Hyde",
+   "author": "R. L. Stevenson",
+   "year": 2003,
+   "pub": "Penguin",
+   "pages": 144,
+   "cond": "new",
+   "price": 3200,
+   "note": "Penguin Classics, read once.",
+   "status": "sent",
+   "sent": 1790861877652
+  },
+  {
+   "id": "o3",
+   "req": "r1",
+   "seller": "grigor",
+   "loc": "wh",
+   "title": "Solaris",
+   "author": "Stanisław Lem",
+   "year": 1988,
+   "pub": "Mir",
+   "pages": 280,
+   "cond": "old",
+   "price": 3000,
+   "note": "Cover worn at the corners, text block sound. Scientists, and quite mad by the end.",
+   "status": "sent",
+   "sent": 1791358677652
+  },
+  {
+   "id": "h1",
+   "req": "rh1",
+   "seller": "aram",
+   "loc": "mash",
+   "title": "Anna Karenina",
+   "author": "Lev Tolstoy",
+   "year": 1979,
+   "pub": "Khudozhestvennaya Literatura",
+   "cond": "used",
+   "price": 5200,
+   "note": "",
+   "status": "done_sold",
+   "sent": 1790257077652,
+   "review": "passed"
+  },
+  {
+   "id": "h2",
+   "req": "rh2",
+   "seller": "nairi",
+   "loc": "tum12",
+   "title": "Norwegian Wood",
+   "author": "Haruki Murakami",
+   "year": 2003,
+   "pub": "Vintage",
+   "cond": "new",
+   "price": 7400,
+   "note": "",
+   "status": "done_sold",
+   "sent": 1790516277652,
+   "review": "passed"
+  },
+  {
+   "id": "h3",
+   "req": "rh3",
+   "seller": "aram",
+   "loc": "tum",
+   "title": "The Chrysalids",
+   "author": "John Wyndham",
+   "year": 1988,
+   "pub": "Penguin",
+   "cond": "used",
+   "price": 4300,
+   "note": "",
+   "status": "done_sold",
+   "sent": 1791121077652,
+   "review": "passed"
+  },
+  {
+   "id": "o4",
+   "req": "r2",
+   "seller": "aram",
+   "loc": "tum",
+   "title": "Master and Margarita",
+   "author": "Mikhail Bulgakov",
+   "year": 1988,
+   "pub": "Khudozhestvennaya Literatura",
+   "pages": 480,
+   "cond": "new",
+   "price": 6000,
+   "note": "The 1988 printing you asked for. Dust jacket intact.",
+   "status": "sent",
+   "sent": 1791121077652
+  },
+  {
+   "id": "o5",
+   "req": "r5",
+   "seller": "grigor",
+   "loc": "wh",
+   "title": "Norwegian Wood",
+   "author": "Haruki Murakami",
+   "year": 2000,
+   "pub": "Vintage",
+   "pages": 296,
+   "cond": "used",
+   "price": 4200,
+   "note": "reprint",
+   "status": "sent",
+   "sent": 1791463677652,
+   "review": "waiting"
+  }
+ ],
+ "cart": [],
+ "orders": [
+  {
+   "id": 408,
+   "reader": "h_mane",
+   "name": "Mane",
+   "phone": "+374 ** ** ** **",
+   "closed": [
+    "hq8"
+   ],
+   "released": 0,
+   "delivery": "pickup",
+   "fee": 0,
+   "books": 5100,
+   "total": 5100,
+   "subs": [
+    {
+     "no": "408-A",
+     "seller": "nairi",
+     "loc": "tum12",
+     "items": [
+      "ho8"
+     ],
+     "delivery": "pickup",
+     "fee": 0,
+     "books": 5100,
+     "total": 5100,
+     "status": "completed",
+     "by": "code",
+     "code": "9912",
+     "reviewed": true,
+     "placedAt": 1781721000000,
+     "readyAt": 1781735400000,
+     "doneAt": 1781793000000
+    }
+   ]
+  },
+  {
+   "id": 409,
+   "reader": "h_nare",
+   "name": "Nare",
+   "phone": "+374 ** ** ** **",
+   "closed": [
+    "hq9"
+   ],
+   "released": 0,
+   "delivery": "pickup",
+   "fee": 0,
+   "books": 6100,
+   "total": 6100,
+   "subs": [
+    {
+     "no": "409-A",
+     "seller": "nairi",
+     "loc": "tum12",
+     "items": [
+      "ho9"
+     ],
+     "delivery": "pickup",
+     "fee": 0,
+     "books": 6100,
+     "total": 6100,
+     "status": "completed",
+     "by": "code",
+     "code": "5297",
+     "reviewed": true,
+     "placedAt": 1782143220000,
+     "readyAt": 1782157620000,
+     "doneAt": 1782215220000
+    }
+   ]
+  },
+  {
+   "id": 410,
+   "reader": "h_gor",
+   "name": "Gor",
+   "phone": "+374 ** ** ** **",
+   "closed": [
+    "hq10"
+   ],
+   "released": 0,
+   "delivery": "pickup",
+   "fee": 0,
+   "books": 8200,
+   "total": 8200,
+   "subs": [
+    {
+     "no": "410-A",
+     "seller": "nairi",
+     "loc": "tum12",
+     "items": [
+      "ho10"
+     ],
+     "delivery": "pickup",
+     "fee": 0,
+     "books": 8200,
+     "total": 8200,
+     "status": "completed",
+     "by": "code",
+     "code": "7591",
+     "reviewed": true,
+     "placedAt": 1782213000000,
+     "readyAt": 1782227400000,
+     "doneAt": 1782285000000
+    }
+   ]
+  },
+  {
+   "id": 411,
+   "reader": "h_mariam",
+   "name": "Mariam",
+   "phone": "+374 ** ** ** **",
+   "closed": [
+    "hq11"
+   ],
+   "released": 0,
+   "delivery": "pickup",
+   "fee": 0,
+   "books": 5900,
+   "total": 5900,
+   "subs": [
+    {
+     "no": "411-A",
+     "seller": "nairi",
+     "loc": "tum12",
+     "items": [
+      "ho11"
+     ],
+     "delivery": "pickup",
+     "fee": 0,
+     "books": 5900,
+     "total": 5900,
+     "status": "completed",
+     "by": "code",
+     "code": "7988",
+     "reviewed": true,
+     "placedAt": 1782308820000,
+     "readyAt": 1782323220000,
+     "doneAt": 1782380820000
+    }
+   ]
+  },
+  {
+   "id": 412,
+   "reader": "h_arsen",
+   "name": "Arsen",
+   "phone": "+374 ** ** ** **",
+   "closed": [
+    "hq12"
+   ],
+   "released": 0,
+   "delivery": "pickup",
+   "fee": 0,
+   "books": 5300,
+   "total": 5300,
+   "subs": [
+    {
+     "no": "412-A",
+     "seller": "nairi",
+     "loc": "tum12",
+     "items": [
+      "ho12"
+     ],
+     "delivery": "pickup",
+     "fee": 0,
+     "books": 5300,
+     "total": 5300,
+     "status": "completed",
+     "by": "code",
+     "code": "8472",
+     "reviewed": true,
+     "placedAt": 1782395340000,
+     "readyAt": 1782409740000,
+     "doneAt": 1782467340000
+    }
+   ]
+  },
+  {
+   "id": 413,
+   "reader": "h_siran",
+   "name": "Siran",
+   "phone": "+374 ** ** ** **",
+   "closed": [
+    "hq13"
+   ],
+   "released": 0,
+   "delivery": "pickup",
+   "fee": 0,
+   "books": 6000,
+   "total": 6000,
+   "subs": [
+    {
+     "no": "413-A",
+     "seller": "nairi",
+     "loc": "tum12",
+     "items": [
+      "ho13"
+     ],
+     "delivery": "pickup",
+     "fee": 0,
+     "books": 6000,
+     "total": 6000,
+     "status": "completed",
+     "by": "code",
+     "code": "5460",
+     "reviewed": true,
+     "placedAt": 1782498780000,
+     "readyAt": 1782513180000,
+     "doneAt": 1782570780000
+    }
+   ]
+  }
+ ],
+ "seq": {
+  "o": 5,
+  "r": 7,
+  "ord": 1042
+ }
+}
