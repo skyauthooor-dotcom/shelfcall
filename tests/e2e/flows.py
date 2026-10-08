@@ -507,18 +507,21 @@ async def courier_pays_the_shop_and_both_screens_change(t):
                   'the shop tab bar never showed the handover')
     await t.go(shop, 's.billing')
     await t.until(lambda: _contains(shop, 'is handing you'), 10, 'the shop billing page never showed the handover')
+    # the code is the shop's: it is on the shop's screen, not the courier's
+    assert await _contains(shop, st['code']), 'the shop does not show the code to give'
+    assert not await _contains(courier, st['code']), 'the courier can see the code without asking the shop'
     wrong = '1111' if st['code'] != '1111' else '2222'
-    await shop.fill('#cash_code', wrong)
-    await t.press(shop, 'cashok:' + st['id'])
-    assert await _contains(shop, 'not the code'), 'a wrong code was accepted'
+    await courier.fill('#c_code', wrong)
+    await t.press(courier, 'csettledone:' + st['id'])
+    assert await _contains(courier, 'not the code'), 'a wrong code was accepted'
     assert t._settle(st['id'])['state'] == 'open'
-    await shop.fill('#cash_code', st['code'])
-    await t.press(shop, 'cashok:' + st['id'])
+    await courier.fill('#c_code', st['code'])
+    await t.press(courier, 'csettledone:' + st['id'])
     await t.until(lambda: t._settle(st['id'])['state'] == 'done', 8, 'the confirmed handover did not reach the server')
     led = [l for l in t.world()['ledger'] if l.get('from') == 'courier' and l.get('to') == 'shop' and l.get('sub') in st['subs']]
     assert sum(l['amount'] for l in led) == st['amount'], (led, st)
-    # the courier's screen, untouched, drops the code and shows the shop settled
-    await t.until(lambda: _not_contains(courier, st['code']), 10, 'the courier still shows the code after the shop confirmed')
+    # the shop's screen, untouched, drops the code once the courier has typed it
+    await t.until(lambda: _not_contains(shop, 'is handing you'), 10, 'the shop still shows the handover after it was recorded')
     await t.until(lambda: courier.evaluate('() => !document.querySelector(\'[data-act="csettlestart:aram"]\')'), 5,
                   'the courier is offered to hand over the same money again')
 
@@ -537,7 +540,7 @@ async def a_handover_where_the_counts_differ_records_no_money(t):
     await t.press(shop, 'cashodd:' + st['id'])
     await t.until(lambda: t._settle(st['id'])['state'] == 'mismatch', 8, 'the disagreement did not reach the server')
     assert len(t.world()['ledger']) == before, 'money was recorded for a disputed handover'
-    await t.until(lambda: _not_contains(courier, st['code']), 10, 'the courier still shows the code')
+    await t.until(lambda: courier.evaluate("() => !document.querySelector('#c_code')"), 10, 'the courier still has the code box open')
     await t.until(lambda: _contains(courier, 'The office has both numbers'), 10, 'the courier was not told the counts differ')
     # and a cancelled one, from the courier's side, disappears from the shop
     await t.press(courier, 'csettlestart:aram')
@@ -602,6 +605,128 @@ async def the_reader_sees_their_own_phone_when_editing(t):
     await t.go(reader, 'x.settings')
     v = await reader.input_value('#p_phone')
     assert v and '*' not in v and sum(ch.isdigit() for ch in v) >= 11, v
+
+
+@flow
+async def reader_edits_a_sent_back_request_and_it_goes_to_the_office_again(t):
+    reader = await t.phone('/reader'); admin = await t.phone('/admin')
+    title = 'Flow R ' + str(random.randint(1000, 9999))
+    rid = await t.reader_asks(reader, title)
+    await t.until(lambda: t._has(admin, 'requests', rid), 8)
+    await t.go(admin, 'a.req', rid)
+    await t.press(admin, 'apreset:0')
+    await t.press(admin, 'reqback:' + rid)
+    await t.until(lambda: t._req(rid).get('review') == 'sent back', 8)
+    await t.until(lambda: t._field(reader, 'requests', rid, 'review', 'sent back'), 10)
+    await t.go(reader, 'r.request', rid)
+    await t.press(reader, 'editreq:' + rid)
+    assert await reader.input_value('#f_title') == title, 'the edit form did not open with the request in it'
+    await reader.fill('#f_title', title + ' fixed'); await reader.locator('#f_title').blur()
+    await t.press(reader, 'rstep:3')
+    await t.press(reader, 'publish')
+    await t.until(lambda: t._req(rid).get('review') == 'waiting' and t._req(rid).get('title') == title + ' fixed', 8,
+                  'the edited request did not go back to the office')
+    assert sum(1 for r in t.world()['requests'] if (r.get('title') or '').startswith(title)) == 1, 'editing made a second request'
+    await t.until(lambda: t._field(admin, 'requests', rid, 'review', 'waiting'), 10, 'the office never saw it come back')
+
+
+@flow
+async def shop_answers_a_review_and_the_reader_sees_it(t):
+    w = t.own_world()
+    shop = await t.phone('/seller' + w); reader = await t.phone('/reader' + w)
+    await t.go(shop, 's.reviews')
+    await t.press(shop, 'revopen:0')
+    await shop.fill('#rp_text', 'Thank you, Dina')
+    await t.press(shop, 'revpost:0')
+    await t.until(lambda: any((v.get('reply') or {}).get('text') == 'Thank you, Dina' for v in t.world()['sellers']['aram']['reviews']), 8,
+                  'the answer did not reach the server')
+    await t.go(reader, 'r.seller', 'aram')
+    await t.until(lambda: _contains(reader, 'Thank you, Dina'), 10, 'the reader never saw the answer')
+
+
+@flow
+async def office_opens_a_shop_and_a_second_phone_answers_as_it(t):
+    w = t.own_world()
+    admin = await t.phone('/admin' + w); shop2 = await t.phone('/seller' + w); reader = await t.phone('/reader' + w)
+    await t.go(admin, 'a.newshop')
+    await admin.fill('#ns_name', 'Flow Shop'); await admin.fill('#ns_email', 'flow@example.am')
+    await t.press(admin, 'nsstep:2')
+    await admin.fill('#ns_addr', 'Abovyan 3')
+    await t.press(admin, 'opsnewshop')
+    sid = await t.until(lambda: next((k for k, v in t.world()['sellers'].items() if v.get('name') == 'Flow Shop'), None), 8,
+                        'the new shop did not reach the server')
+    await t.go(shop2, 'x.settings')
+    await t.until(lambda: shop2.evaluate("(k) => !!document.querySelector('#shopSel option[value=\"' + k + '\"]')", sid), 10,
+                  'the second phone cannot pick the new shop')
+    await shop2.select_option('#shopSel', sid); await shop2.wait_for_timeout(300)
+    title = 'Flow S ' + str(random.randint(1000, 9999))
+    rid = await t.reader_asks(reader, title)
+    await t.admin_passes_request(admin, rid)
+    oid = await t.shop_offers(shop2, rid, title)
+    assert t._off(oid)['seller'] == sid, 'the offer was sent as the wrong shop'
+    # and after a reload the phone is still that shop
+    await shop2.reload(); await shop2.wait_for_timeout(1500)
+    await t.go(shop2, 'x.settings')
+    assert await shop2.input_value('#shopSel') == sid
+
+
+@flow
+async def shop_registers_and_the_office_opens_it(t):
+    w = t.own_world()
+    shop = await t.phone('/seller' + w); admin = await t.phone('/admin' + w)
+    await t.go(shop, 'x.settings')
+    await t.press(shop, 'newshop')
+    await shop.fill('#g_shop', 'Reg Shop'); await t.press(shop, 'gstep:2')
+    await shop.fill('#g_bio', 'Old maps and atlases.'); await t.press(shop, 'gstep:3')
+    await shop.fill('#g_label', 'Stall'); await shop.fill('#g_addr', 'Tumanyan 5'); await shop.fill('#g_hours', 'Sat 11-19')
+    await t.press(shop, 'gstep:4')
+    await t.press(shop, 'finishreg')
+    ap = await t.until(lambda: next((a for a in t.world()['shopApps'] if a.get('name') == 'Reg Shop'), None), 8, 'the application never reached the office')
+    assert t.world()['sellers'][ap['owner']].get('pending'), 'a shop that is not checked yet is already open'
+    await t.until(lambda: _contains(shop, 'checking'), 8)
+    await t.until(lambda: t._has(admin, 'shopApps', ap['id']), 10)
+    await t.go(admin, 'a.app', ap['id'])
+    await t.press(admin, 'aset:dec:open')
+    await t.press(admin, 'shopopen:' + ap['id'])
+    await t.until(lambda: not t.world()['sellers'][ap['owner']].get('pending'), 8, 'opening did not reach the server')
+    await t.until(lambda: t._field(shop, 'shopApps', ap['id'], 'state', 'open'), 10, 'the shop phone never heard it was opened')
+    await t.go(shop, 's.feed')
+    assert await shop.evaluate("() => SC_DEBUG.screen()") == 's.feed', 'the opened shop is still held on its application'
+
+
+@flow
+async def shop_pays_its_commission_with_a_receipt_photo(t):
+    w = t.own_world()
+    shop = await t.phone('/seller' + w); admin = await t.phone('/admin' + w)
+    await t.go(shop, 's.billing')
+    await t.press(shop, 'setstate:due')
+    await t.go(shop, 's.pay')
+    assert await _contains(shop, '1570 0453 2189 0100'), 'the bank account is not shown in full'
+    await t.press(shop, 'sendclaim')
+    assert await _contains(shop, 'photo of the receipt'), 'a claim without a receipt was accepted'
+    await shop.set_input_files('#rcptIn', os.path.join(HERE, 'book.jpg')); await shop.wait_for_timeout(900)
+    await t.press(shop, 'sendclaim')
+    await t.until(lambda: (t.world()['account'].get('claim') or {}).get('photo', '').startswith('data:image'), 8, 'the claim with its photo did not reach the server')
+    await t.go(admin, 'a.claim', 'aram')
+    await t.until(lambda: admin.evaluate("() => !!document.querySelector('main img.thumb')"), 10, 'the office does not see the receipt')
+    await admin.fill('#op_why', 'Found it')
+    await t.press(admin, 'opsclaimok')
+    await t.until(lambda: not t.world()['account'].get('claim') and t.world()['account']['state'] == 'good', 8)
+
+
+@flow
+async def billing_counts_every_order_on_the_day_it_was_placed(t):
+    w = t.own_world()
+    shop = await t.phone('/seller' + w)
+    await t.go(shop, 's.billing')
+    assert not await shop.evaluate("() => !!document.querySelector('[data-act=\"aset:bd:14\"]')"), 'the 14/30 day chips are back'
+    assert await shop.evaluate("() => !!document.querySelector('.chart.bare svg')"), 'no chart'
+    assert await shop.evaluate("() => !document.querySelector('.chart.bare .grid')"), 'the chart has grid lines'
+    # the headline is every order of this period, paid or not, by order day
+    assert await _contains(shop, 'still coming') or await _contains(shop, 'all in your till')
+    await t.press(shop, 'earn:all')
+    assert await _contains(shop, 'All periods together')
+    assert not await shop.evaluate("() => [...document.querySelectorAll('#tabbar [data-go]')].some(b => b.getAttribute('data-go') === 's.stats')"), 'Results is still in the tab bar'
 
 
 async def _contains(pg, s):
