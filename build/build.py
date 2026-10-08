@@ -23,8 +23,9 @@ Each single-role build is the master with the role switcher cut out, the role
 pinned, the opening screen changed, and some seed data appended so the app
 opens on something worth looking at.
 
-public/ is generated. Never edit it by hand; run this script and commit the
-result. Vercel serves public/ as it is, with no build step of its own.
+public/ is generated. Never edit it by hand. Vercel runs this same script on
+every deploy (buildCommand in vercel.json), so the live site always comes from
+the master; run it locally to look at the pages before you push.
 """
 
 import glob, os, re, shutil, sys
@@ -51,11 +52,11 @@ ROLE_CHANGE_HANDLER = re.compile(
 
 # the sentence under the footer's Light / Busy switch
 FOOTER_TEXT = re.compile(
-    r"""esc\('Prototype with sample data — every role is you\. ' \+.*?\)\)\+'</p>';""", re.S)
+    r"""esc\('Prototype with sample data — every role is you\. ' \+.*?\)\)\+'</p>'""", re.S)
 
 ROLE_DEFAULT = "    me: { role:'reader',"
 SCREEN_DEFAULT = "  var view = { screen:'r.requests',"
-FIRST_RENDER = "  render();\n})();"
+FIRST_RENDER = "  syncBoot();\n})();"
 
 HOME = {'reader': 'r.requests', 'seller': 's.feed', 'courier': 'c.jobs',
         'ops': 'a.work'}
@@ -221,14 +222,25 @@ EMPTY_FOOTER = ('Nothing is filled in: no requests, no orders, no history, and n
                 'answer your own request as a bookshop and deliver it as the courier. '
                 'Reload to wipe it.')
 
-# (file, role, title, keep switcher, seed, footer override)
+# Which shared world each page joins on the deployed site (see the sync block
+# in the master). The sample pages all share 'main', so a reader on one phone
+# and a bookshop on another see each other. The empty page has its own world,
+# 'empty', which starts with no requests at all.
+#
+# A seed is either:
+#   'world' - shapes a brand-new world the first time anyone opens it, and is
+#             also used when the page runs on its own (opened from disk);
+#   'local' - demo data for one role, used ONLY when the page runs on its own.
+#             In the shared world it would fight with the other roles' data.
+#
+# (file, role, title, keep switcher, world, seed, seed kind, footer override)
 BUILDS = [
-    ('all-roles', 'reader',  'Shelfcall Prototype',          True,  None,         None),
-    ('reader',    'reader',  'Shelfcall for Readers',        False, None,         None),
-    ('seller',    'seller',  'Shelfcall for Booksellers',    False, SELLER_SEED,  None),
-    ('courier',   'courier', 'Shelfcall for Couriers',       False, COURIER_SEED, None),
-    ('admin',     'ops',     'Shelfcall Admin',              False, None,         None),
-    ('empty',     'reader',  'Shelfcall — empty, for testing', True, EMPTY_SEED, EMPTY_FOOTER),
+    ('all-roles', 'reader',  'Shelfcall Prototype',          True,  'main',  None,         None,    None),
+    ('reader',    'reader',  'Shelfcall for Readers',        False, 'main',  None,         None,    None),
+    ('seller',    'seller',  'Shelfcall for Booksellers',    False, 'main',  SELLER_SEED,  'local', None),
+    ('courier',   'courier', 'Shelfcall for Couriers',       False, 'main',  COURIER_SEED, 'local', None),
+    ('admin',     'ops',     'Shelfcall Admin',              False, 'main',  None,         None,    None),
+    ('empty',     'reader',  'Shelfcall \u2014 empty, for testing', True, 'empty', EMPTY_SEED, 'world', EMPTY_FOOTER),
 ]
 
 DOC_HEAD = (
@@ -264,7 +276,7 @@ def need(anchor, src, label):
                  'Update the anchor in build/build.py.' % label)
 
 
-def build(src, role, title, keep_switcher, seed, footer):
+def build(src, role, title, keep_switcher, world, seed, seed_kind, footer):
     s = src
     s = s.replace('<title>Shelfcall Prototype</title>', '<title>%s</title>' % title, 1)
     if not keep_switcher:
@@ -273,11 +285,13 @@ def build(src, role, title, keep_switcher, seed, footer):
     s = s.replace(ROLE_DEFAULT, "    me: { role:'%s'," % role, 1)
     s = s.replace(SCREEN_DEFAULT, "  var view = { screen:'%s'," % HOME[role], 1)
     if footer:
-        s = FOOTER_TEXT.sub(lambda m: "esc(%s)+'</p>';" % js_string(footer), s, count=1)
+        s = FOOTER_TEXT.sub(lambda m: "esc(%s)+'</p>'" % js_string(footer), s, count=1)
         # the Light half of the footer switch has nothing in it in this build
         s = s.replace(": 'a few requests, offers and orders')", ": 'nothing until you add it')", 1)
+    setup = "  SYNC.space = %s;\n" % js_string(world)
     if seed:
-        s = s.replace(FIRST_RENDER, seed + '\n' + FIRST_RENDER, 1)
+        setup += "  SYNC.%sSeed = function(){%s  };\n" % (seed_kind, seed)
+    s = s.replace(FIRST_RENDER, setup + FIRST_RENDER, 1)
     return whole_document(s)
 
 
@@ -304,12 +318,12 @@ def main():
     if os.path.isdir(OUT):
         shutil.rmtree(OUT)
 
-    for name, role, title, keep_switcher, seed, footer in BUILDS:
-        html = build(src, role, title, keep_switcher, seed, footer)
+    for name, role, title, keep_switcher, world, seed, seed_kind, footer in BUILDS:
+        html = build(src, role, title, keep_switcher, world, seed, seed_kind, footer)
         if keep_switcher:
             assert 'id="roleSel"' in html, 'the %s build needs its role switcher' % name
         else:
-            assert 'roleSel' not in html, 'role switcher survived in %s' % name
+            assert 'id="roleSel"' not in html, 'role switcher survived in %s' % name
         write(os.path.join(OUT, name + '.html'), html)
 
     with open(LANDING, encoding='utf-8') as f:
