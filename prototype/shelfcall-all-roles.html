@@ -26,6 +26,11 @@
      which the in-app Light / Dark / Match-my-phone switch writes.
      ========================================================================== */
 
+  /* The browser's own parts - scrollbars, the list a <select> opens, date
+     pickers - follow color-scheme. Without these two lines "Light" on a
+     phone set to dark drew dark menus over a light page. */
+  :root{ color-scheme: light; }
+  :root[data-theme="light"]{ color-scheme: light; }
   :root{
     --radius: 0.625rem;
     --radius-sm: calc(var(--radius) - 4px);
@@ -533,6 +538,12 @@
   .stack-list{display:flex;flex-direction:column;gap:12px}
   .card-row{border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--background);padding:16px;display:flex;gap:14px;text-align:left;width:100%;align-items:flex-start}
   button.card-row:hover{background:var(--muted)}
+  /* BORDER MEANS BUTTON, measured: a card you press wears --edge like every
+     other control (3:1 or better against the page, WCAG 1.4.11). Cards that
+     only hold information keep the quiet --border. These three were pressable
+     and drew 1.2:1 - an edge you could not see on a phone in daylight. */
+  button.card-row, button.pick, button.asked-card{border-color:var(--edge)}
+  button.card-row:hover{border-color:var(--foreground)}
   .card-row.on{border-color:var(--muted-foreground)}
   /* avatar - shadcn's, an image over an initials fallback */
   .av{flex:none;border-radius:var(--radius-full);background:var(--muted);color:var(--muted-foreground);
@@ -1503,7 +1514,17 @@
       }).join('')+'</div>';
   }
 
-  function toast(msg){ view.toast = msg; render(); setTimeout(function(){ if(view.toast===msg){ view.toast=null; render(); } }, 2400); }
+  /* Taking the message away removes the message and nothing else. It used to
+     redraw the whole screen, which wiped whatever had been typed since. */
+  function toast(msg){
+    view.toast = msg; render();
+    setTimeout(function(){
+      if (view.toast !== msg) return;
+      view.toast = null;
+      var t = document.querySelector('#app .toast');
+      if (t) t.remove();
+    }, 2400);
+  }
 
   /* a destructive action asks once, in place, instead of a dialog */
   /* ---- the sheet ----------------------------------------------------------
@@ -6362,10 +6383,33 @@
   }
 
   /* ---- appearance: light, dark, or whatever the phone is set to ---- */
+  /* Light / Dark / Match my phone is remembered on this device, for every
+     page of the site. It used to live only in memory, so a reload - or
+     opening the bookseller page after the reader page - went back to
+     following the phone. */
   function applyTheme(){
     var t = db.theme || 'system';
     if (t === 'system') document.documentElement.removeAttribute('data-theme');
     else document.documentElement.setAttribute('data-theme', t);
+    try { localStorage.setItem('sc_theme', t); } catch(e){}
+    /* the phone's own address bar follows too */
+    var dark = t === 'dark' || (t === 'system' && window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta){ meta = document.createElement('meta'); meta.name = 'theme-color'; document.head.appendChild(meta); }
+    meta.content = dark ? '#1c1c1c' : '#f4f4f4';
+  }
+  try {
+    var savedTheme = localStorage.getItem('sc_theme');
+    if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'system') db.theme = savedTheme;
+    var savedLang = localStorage.getItem('sc_lang');
+    if (savedLang === 'en' || savedLang === 'ru' || savedLang === 'hy') db.lang = savedLang;
+    document.documentElement.lang = db.lang || 'en';
+  } catch(e){}
+  if (window.matchMedia){
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    var follow = function(){ if ((db.theme || 'system') === 'system') applyTheme(); };
+    if (mq.addEventListener) mq.addEventListener('change', follow); else if (mq.addListener) mq.addListener(follow);
   }
   /* ---- language ------------------------------------------------------------
      Shelfcall is Armenian-first: in production `hy` is the default and this
@@ -8665,7 +8709,7 @@
         }
         render(); break;
       }
-      case 'lang': { db.lang = a; try { document.documentElement.lang = a; } catch(err){} toast(a==='en' ? 'English' : a==='ru' ? '\u0420\u0443\u0441\u0441\u043a\u0438\u0439' : '\u0540\u0561\u0575\u0565\u0580\u0565\u0576'); render(); break; }
+      case 'lang': { db.lang = a; try { document.documentElement.lang = a; localStorage.setItem('sc_lang', a); } catch(err){} toast(a==='en' ? 'English' : a==='ru' ? '\u0420\u0443\u0441\u0441\u043a\u0438\u0439' : '\u0540\u0561\u0575\u0565\u0580\u0565\u0576'); render(); break; }
       case 'theme': { db.theme = a; applyTheme();
         toast(a==='system' ? 'Following your phone' : a==='light' ? 'Light' : 'Dark'); render(); break; }
       case 'flagline': toast('Flagged \u2014 held out of the total until an operator checks it'); break;
@@ -9131,66 +9175,169 @@
     Object.keys(db).forEach(function(k){ if (!SYNC_LOCAL[k]) out[k] = db[k]; });
     return JSON.parse(JSON.stringify(out));
   }
-  function syncKeyOf(x){
-    return (x && typeof x === 'object' && !Array.isArray(x) && x.id != null) ? 'i:' + x.id : 'j:' + JSON.stringify(x);
-  }
-  function syncIsMap(x){ return x && typeof x === 'object' && !Array.isArray(x) }
+  /* ==== sync-core:begin ==================================================== */
+  var SyncCore = (function(){
+    /* Changes travel as a list of operations on paths, not as whole records.
+       A request approved by the admin while a bookshop marks it "seen" is two
+       edits to two different fields, and both survive. Only two edits to the
+       very same field collide, and then the later one wins.
 
-  /* what changed between two copies of the world, record by record */
-  function syncDiff(a, b){
-    var p = {}, n = 0;
-    Object.keys(b).forEach(function(k){
-      var A = a[k], B = b[k];
-      if (JSON.stringify(A) === JSON.stringify(B)) return;
-      if (Array.isArray(A) && Array.isArray(B)){
-        var am = {}, bm = {}, up = [], rm = [];
-        A.forEach(function(x){ am[syncKeyOf(x)] = JSON.stringify(x) });
-        B.forEach(function(x){ var key = syncKeyOf(x); bm[key] = 1;
-          if (am[key] !== JSON.stringify(x)) up.push(x) });
-        Object.keys(am).forEach(function(key){ if (!bm[key]) rm.push(key) });
-        p[k] = { t:'list', up: up, rm: rm };
-      } else if (syncIsMap(A) && syncIsMap(B)){
-        var mu = {}, mr = [];
-        Object.keys(B).forEach(function(kk){
-          if (JSON.stringify(A[kk]) !== JSON.stringify(B[kk])) mu[kk] = B[kk] });
-        Object.keys(A).forEach(function(kk){ if (!(kk in B)) mr.push(kk) });
-        p[k] = { t:'map', up: mu, rm: mr };
-      } else {
-        p[k] = { t:'set', v: B };
+       A path is a list of steps. A step is a key in an object, or {k, v}: the
+       element of a list whose field k (id, or no for a shop's part of an order)
+       equals v. An operation is one of
+         { p: path, v: value }   set the value there (or add the element)
+         { p: path, d: 1 }       remove it
+         { p: path, add: item }  a list of records without ids (the ledger, a
+                                 shop's reviews): add one, if it is not there
+         { p: path, rem: json }  ... or take one out
+       An added element carries i, its position, so a review put at the top
+       with unshift is at the top on every phone, not only on the one that
+       wrote it.                                                              */
+
+    function isMap(x){ return x !== null && typeof x === 'object' && !Array.isArray(x) }
+    function same(a, b){ return JSON.stringify(a) === JSON.stringify(b) }
+
+    /* the field that names the elements of a list, if every element has one */
+    function idField(list){
+      if (!list.length) return null;
+      var fields = ['id', 'no'];
+      for (var i = 0; i < fields.length; i++){
+        var f = fields[i], all = true;
+        for (var j = 0; j < list.length; j++){
+          if (!isMap(list[j]) || list[j][f] === undefined || list[j][f] === null){ all = false; break; }
+        }
+        if (all) return f;
       }
-      n++;
-    });
-    Object.keys(a).forEach(function(k){ if (!(k in b)){ p[k] = { t:'del' }; n++; } });
-    return n ? p : null;
-  }
-  /* lay a set of changes on top of a world. The server runs the same rules. */
-  function syncApply(world, p){
-    var w = JSON.parse(JSON.stringify(world || {}));
-    if (!p) return w;
-    Object.keys(p).forEach(function(k){
-      var c = p[k];
-      if (c.t === 'set'){ w[k] = c.v; return; }
-      if (c.t === 'del'){ delete w[k]; return; }
-      if (c.t === 'map'){
-        var m = syncIsMap(w[k]) ? w[k] : {};
-        (c.rm || []).forEach(function(kk){ delete m[kk] });
-        Object.keys(c.up || {}).forEach(function(kk){ m[kk] = c.up[kk] });
-        w[k] = m; return;
-      }
-      if (c.t === 'list'){
-        var arr = Array.isArray(w[k]) ? w[k] : [], gone = {};
-        (c.rm || []).forEach(function(key){ gone[key] = 1 });
-        arr = arr.filter(function(x){ return !gone[syncKeyOf(x)] });
-        (c.up || []).forEach(function(x){
-          var key = syncKeyOf(x), at = -1;
-          for (var i = 0; i < arr.length; i++) if (syncKeyOf(arr[i]) === key){ at = i; break; }
-          if (at >= 0) arr[at] = x; else arr.push(x);
+      return null;
+    }
+
+    function diff(a, b){
+      var ops = [];
+      walk(a, b, [], ops);
+      return ops;
+    }
+    function walk(a, b, path, ops){
+      if (same(a, b)) return;
+      if (isMap(a) && isMap(b)){
+        Object.keys(b).forEach(function(k){
+          if (!(k in a)) ops.push({ p: path.concat([k]), v: b[k] });
+          else walk(a[k], b[k], path.concat([k]), ops);
         });
-        w[k] = arr;
+        Object.keys(a).forEach(function(k){
+          if (!(k in b)) ops.push({ p: path.concat([k]), d: 1 });
+        });
+        return;
       }
-    });
-    return w;
-  }
+      if (Array.isArray(a) && Array.isArray(b)){
+        var kf = idField(a.concat(b));
+        if (kf){
+          var inA = {}, inB = {};
+          a.forEach(function(x){ inA[JSON.stringify(x[kf])] = x });
+          b.forEach(function(x){
+            var key = JSON.stringify(x[kf]), step = { k: kf, v: x[kf] };
+            inB[key] = 1;
+            if (!(key in inA)) ops.push({ p: path.concat([step]), v: x, i: b.indexOf(x) });
+            else walk(inA[key], x, path.concat([step]), ops);
+          });
+          a.forEach(function(x){
+            if (!inB[JSON.stringify(x[kf])]) ops.push({ p: path.concat([{ k: kf, v: x[kf] }]), d: 1 });
+          });
+          return;
+        }
+        if (a.concat(b).every(isMap)){
+          var setA = {}, setB = {};
+          a.forEach(function(x){ setA[JSON.stringify(x)] = 1 });
+          b.forEach(function(x, n){
+            var s = JSON.stringify(x); setB[s] = 1;
+            if (!setA[s]) ops.push({ p: path, add: x, i: n });
+          });
+          a.forEach(function(x){
+            var s = JSON.stringify(x);
+            if (!setB[s]) ops.push({ p: path, rem: s });
+          });
+          return;
+        }
+      }
+      ops.push({ p: path, v: b });
+    }
+
+    function indexOf(list, step){
+      for (var i = 0; i < list.length; i++){
+        if (isMap(list[i]) && same(list[i][step.k], step.v)) return i;
+      }
+      return -1;
+    }
+
+    function insertAt(list, item, i){
+      if (typeof i === 'number' && i >= 0 && i < list.length) list.splice(i, 0, item);
+      else list.push(item);
+    }
+
+    /* Lay operations on a copy of a world. An operation whose record is gone
+       (deleted on another phone) is dropped rather than bringing it back. */
+    function apply(world, ops){
+      var w = JSON.parse(JSON.stringify(world || {}));
+      (ops || []).forEach(function(op){ applyOne(w, op) });
+      return w;
+    }
+    function applyOne(root, op){
+      var p = op && op.p;
+      if (!Array.isArray(p) || !p.length) return;
+      var isLog = ('add' in op) || ('rem' in op);
+      var stop = isLog ? p.length : p.length - 1;
+      var cur = root;
+      for (var i = 0; i < stop; i++){
+        var step = p[i], next;
+        if (isMap(step)){
+          if (!Array.isArray(cur)) return;
+          var at = indexOf(cur, step);
+          if (at < 0) return;
+          next = cur[at];
+        } else {
+          if (!isMap(cur)) return;
+          next = cur[step];
+          if (next !== undefined && next !== null && typeof next !== 'object') return;
+          if (next === undefined || next === null){
+            var follow = p[i + 1];
+            next = (isLog && i === stop - 1) || isMap(follow) ? [] : {};
+            cur[step] = next;
+          }
+        }
+        cur = next;
+      }
+      if (isLog){
+        if (!Array.isArray(cur)) return;
+        if ('add' in op){
+          var s = JSON.stringify(op.add), have = false;
+          for (var a = 0; a < cur.length; a++) if (JSON.stringify(cur[a]) === s){ have = true; break; }
+          if (!have) insertAt(cur, op.add, op.i);
+        } else {
+          for (var r = 0; r < cur.length; r++) if (JSON.stringify(cur[r]) === op.rem){ cur.splice(r, 1); break; }
+        }
+        return;
+      }
+      var last = p[p.length - 1];
+      if (isMap(last)){
+        if (!Array.isArray(cur)) return;
+        var j = indexOf(cur, last);
+        if (op.d){ if (j >= 0) cur.splice(j, 1); }
+        else if (j >= 0) cur[j] = op.v;
+        else insertAt(cur, op.v, op.i);
+      } else {
+        if (!isMap(cur)) return;
+        if (op.d) delete cur[last];
+        else cur[last] = op.v;
+      }
+    }
+
+    return { diff: diff, apply: apply, isMap: isMap };
+  })();
+  /* ==== sync-core:end ====================================================== */
+  /* what changed between two copies of the world, as operations, or null */
+  function syncDiff(a, b){ var ops = SyncCore.diff(a || {}, b || {}); return ops.length ? ops : null; }
+  /* lay operations on top of a world. The server runs the very same code. */
+  function syncApply(world, ops){ return SyncCore.apply(world, ops || []); }
+
   /* put a world into `db`, keeping this device's own keys */
   function syncAdopt(world){
     /* a copy: `db` is edited in place by every screen, and SYNC.base must
@@ -9221,9 +9368,14 @@
 
   /* Only redraw under somebody's feet when it cannot cost them anything:
      not while they are typing, not while a sheet is asking them something. */
+  function syncTyping(el){
+    if (!el) return false;
+    if (el.tagName === 'TEXTAREA' || el.isContentEditable) return true;
+    return el.tagName === 'INPUT' &&
+      /^(text|search|tel|email|number|password|url)$/i.test(el.type || 'text');
+  }
   function syncCanRedraw(){
-    var a = document.activeElement;
-    if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.id !== 'roleSel') return false;
+    if (syncTyping(document.activeElement)) return false;
     if (view.sheet || SYNC.dirty) return false;
     return true;
   }
@@ -9253,7 +9405,7 @@
     var patch = syncDiff(SYNC.base, sent);
     if (!patch) return;
     SYNC.inflight = true;
-    syncApi('POST', { op: 'patch', base: SYNC.v, patch: patch, device: SYNC.device })
+    syncApi('POST', { op: 'patch', base: SYNC.v, ops: patch, device: SYNC.device })
       .then(function(res){ syncTake(res, sent); })
       .catch(syncFailed)
       .then(function(){
@@ -9265,7 +9417,10 @@
     if (SYNC.mode !== 'shared' || SYNC.inflight || document.hidden) return;
     SYNC.inflight = true;
     syncApi('GET')
-      .then(function(res){ if (!res.same) syncTake(res, syncShared()); else syncOk(); })
+      .then(function(res){
+        if (!res.same) syncTake(res, syncShared());
+        else { syncOk(); if (SYNC.staleView && syncCanRedraw()) syncRedraw(); }
+      })
       .catch(syncFailed)
       .then(function(){ SYNC.inflight = false; if (SYNC.again){ SYNC.again = false; syncPush(); } });
   }
@@ -9349,10 +9504,30 @@
       .catch(function(){ toast('Could not reach the server. Nothing was changed.') })
       .then(function(){ SYNC.inflight = false; });
   }
-  document.addEventListener('input', function(){ SYNC.dirty = true; });
-  document.addEventListener('focusout', function(){
-    setTimeout(function(){ if (SYNC.staleView && syncCanRedraw()) syncRedraw(); }, 0);
+  document.addEventListener('input', function(e){ if (syncTyping(e.target)) SYNC.dirty = true; });
+  /* Leaving a field keeps what was typed (readDraft) and lets a waiting
+     update through. Without this a shop that once typed in the search box
+     would not see a new request until it tapped something. */
+  document.addEventListener('focusout', function(e){
+    if (!syncTyping(e.target)) return;
+    setTimeout(function(){
+      if (syncTyping(document.activeElement)) return;
+      try { readDraft(); } catch(err){}
+      SYNC.dirty = false;
+      if (SYNC.staleView && syncCanRedraw()) syncRedraw();
+    }, 0);
   });
+  /* read-only, for tests/e2e: has this page received a record yet? */
+  window.SC_DEBUG = {
+    has: function(kind, id){
+      return (db[kind] || []).some(function(x){ return String(x.id) === String(id) });
+    },
+    mode: function(){ return SYNC.mode },
+    get: function(kind, id){
+      var x = (db[kind] || []).filter(function(r){ return String(r.id) === String(id) })[0];
+      return x ? JSON.parse(JSON.stringify(x)) : null;
+    }
+  };
   /* ==== end of shared test world ============================================ */
 
   function render(moved){
