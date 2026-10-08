@@ -802,6 +802,12 @@
   .pblock{margin:4px 0 6px}
   .chart.bare{margin:10px 0 6px}
   .chart.bare .readout{margin:0 0 6px}
+  .chart.scroll svg{max-width:none}
+  .chart.scroll .cwrap{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;scrollbar-width:thin}
+  .chart .bar.dim .b{opacity:.3}
+  .chart .bar.later .stub{opacity:.5}
+  .chart text.dnum{font-variant-numeric:tabular-nums}
+  .chart text.dnum.today{fill:var(--foreground);font-weight:600}
   .chart.active .bar:not(.on) .b{opacity:.28}
   .readout{font-size:13px;line-height:18px;margin:0 0 8px;color:var(--foreground);font-variant-numeric:tabular-nums;min-height:18px}
   .hbar{flex:0 1 40%;height:8px;border-radius:0 4px 4px 0;background:var(--tint);overflow:hidden;min-width:48px}
@@ -4410,46 +4416,67 @@
       ? r.orders+' order'+(r.orders===1?'':'s')+' · '+money(r.books)+(r.coming ? ' · '+money(r.coming)+' still coming' : '')
       : 'no orders');
   }
-  function periodTip(r){
-    return r.label+' · '+(r.orders ? r.orders+' order'+(r.orders===1?'':'s')+' · '+money(r.books) : 'no orders');
-  }
-  /* The chart without its box: no frame, no grid, no scale. The page's own
-     margins are its edges, so the columns get the width the frame and its
-     padding used to take. The highlighted column carries its number; a tap
-     on any other column gives that one's. Days with nothing get a short
-     stub so the days can still be counted. */
-  function bareChart(rows, id, tipFn, labelFn, label){
+  /* Every day of the period gets its column and its date underneath, the
+     days still to come included, so the period reads as a month and not as
+     "however far we have got". In a long stretch (all periods together) the
+     columns keep a thumb's width and the chart scrolls sideways inside its
+     own box; the page itself never scrolls sideways. A column with an action
+     picks that day; the list under the chart follows it, and the same column
+     again lets go. */
+  function dayChart(rows, id, opt){
+    opt = opt || {};
     var app = document.getElementById('app');
-    var W = Math.round(Math.max(300, Math.min(900, (app && app.clientWidth ? app.clientWidth : 390) - 32)));
-    var H = 196, B = 20, T = 20, n = Math.max(rows.length, 1), slot = W / n;
-    var bw = Math.min(40, Math.max(5, slot * 0.76));
+    var avail = Math.round(Math.max(300, Math.min(900, (app && app.clientWidth ? app.clientWidth : 390) - 32)));
+    var n = Math.max(rows.length, 1);
+    var slot = opt.scroll ? Math.max(26, avail / n) : avail / n;
+    /* too narrow for every date on one line: they take two staggered lines,
+       so each still sits under its own column at a legible size */
+    var two = slot < 20;
+    var W = Math.round(slot * n), H = two ? 222 : 210, B = two ? 46 : 34, T = 20, ph = H - B - T;
+    var bw = Math.min(30, Math.max(4, slot * 0.7));
     var mx = Math.max.apply(null, rows.map(function(r){ return r.books }).concat([1]));
-    var ph = H - B - T;
-    var on = rows.length - 1;
-    for (var i = rows.length - 1; i >= 0; i--) if (rows[i].books){ on = i; break; }
-    var k = Math.max(1, Math.ceil(n / 5)), bars = '';
+    var sel = opt.sel || null, today = dayKey(now);
+    var on = -1;
+    rows.forEach(function(r, i){ if (sel ? r.key === sel : r.books) on = sel ? (r.key === sel ? i : on) : i; });
+    if (on < 0) on = Math.min(rows.length - 1, Math.max(0, rows.map(function(r){ return r.key }).indexOf(today)));
+    var bars = '';
     rows.forEach(function(r, i){
       var v = r.books, x = i * slot + (slot - bw) / 2, hh = v ? Math.max(3, v / mx * ph) : 2, y = T + ph - hh,
-          rr = v ? Math.min(5, hh, bw / 2) : 0;
+          rr = v ? Math.min(4, hh, bw / 2) : 0, dd = new Date(r.at);
       var d = 'M'+x+','+(T + ph)+' L'+x+','+(y + rr)+' Q'+x+','+y+' '+(x + rr)+','+y+
         ' L'+(x + bw - rr)+','+y+' Q'+(x + bw)+','+y+' '+(x + bw)+','+(y + rr)+' L'+(x + bw)+','+(T + ph)+' Z';
-      bars += '<g class="bar'+(i === on ? ' on' : '')+'" data-tip="'+esc(tipFn(r))+'">'+
+      var cls = 'bar' + (i === on ? ' on' : '') + (sel && r.key !== sel ? ' dim' : '') + (r.at > now ? ' later' : '');
+      bars += '<g class="'+cls+'" data-tip="'+esc(dayTip(r))+'"'+(opt.act ? ' data-act="'+opt.act+':'+r.key+'"' : '')+'>'+
         '<rect class="hit" x="'+(i * slot)+'" y="0" width="'+slot+'" height="'+H+'"/>'+
         '<path class="'+(v ? 'b' : 'stub')+'" d="'+d+'"/>'+
         (i === on && v ? '<text class="val" x="'+(x + bw / 2)+'" y="'+(y - 6)+'" text-anchor="middle">'+compact(v)+'</text>' : '')+
-        ((n - 1 - i) % k === 0 ? '<text x="'+(x + bw / 2)+'" y="'+(H - 4)+'" text-anchor="middle">'+esc(labelFn(r))+'</text>' : '')+'</g>';
+        '<text class="dnum'+(r.key === today ? ' today' : '')+'" x="'+(x + bw / 2)+'" y="'+(two && i % 2 ? H - 18 : two ? H - 31 : H - 18)+'" text-anchor="middle">'+dd.getDate()+'</text>'+
+        ((i === 0 || dd.getDate() === 1) ? '<text x="'+(i * slot + 1)+'" y="'+(H - 3)+'">'+esc(MONTHS[dd.getMonth()])+'</text>' : '')+'</g>';
     });
-    return '<div class="chart bare" data-readout="rd_'+id+'"><p class="readout" id="rd_'+id+'">'+esc(tipFn(rows[on] || rows[0]))+'</p>'+
-      '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(label)+'">'+bars+'</svg></div>';
+    return '<div class="chart bare'+(opt.scroll ? ' scroll' : '')+'" data-readout="rd_'+id+'" data-cid="'+id+'">'+
+      '<p class="readout" id="rd_'+id+'">'+esc(opt.head || dayTip(rows[on] || rows[0]))+'</p>'+
+      '<div class="cwrap"><svg viewBox="0 0 '+W+' '+H+'"'+(opt.scroll ? ' style="width:'+W+'px;height:'+H+'px"' : '')+' role="img" aria-label="'+esc('Orders per day, '+n+' days')+'">'+bars+'</svg></div></div>';
   }
-  function dayChart(rows, id){
-    return bareChart(rows, id, dayTip, function(r){ return dstr(r.at) }, 'Orders per day, '+rows.length+' days');
+  function earnList(list, sel, pgKey){
+    var tot = sum(list, function(x){ return x.sb.books });
+    return '<div class="between" style="margin:14px 0 8px;align-items:baseline;gap:10px">'+
+      '<h2 class="grow" style="margin:0">'+(sel ? esc(dayName2(sel)) : esc(tr('All orders')))+'</h2>'+
+      '<span class="price">'+money(tot)+'</span></div>'+
+      (sel ? '<p class="small muted" style="margin:0 0 8px">'+esc(tr('Tap the same day again to see every order.'))+'</p>' : '')+
+      (list.length ? tradeRows(list, pgKey) : '<p class="small muted">'+esc(tr('No orders that day.'))+'</p>');
   }
-  /* what the period's days look like: from its first day to today, and at
-     least two weeks wide so one busy day is not one fat block */
-  function periodDays(per, list){
-    var end = Math.min(per.to - DAY, Math.max(now, per.from + 13 * DAY));
-    return dayRows(list, per.from, end);
+  /* the whole period, every day of it */
+  function periodDays(per, list){ return dayRows(list, per.from, per.to - DAY) }
+  /* the orders under a chart: one day's when a column is picked, all of them when not */
+  function tradeRows(list, pgKey){
+    var pg = paged(list, pgKey);
+    return '<div class="rowlist">'+pg.rows.map(function(x){
+      var sb = x.sb;
+      return '<button class="row" data-go="s.order" data-p="'+esc(sb.no)+'" style="align-items:center">'+
+        '<div class="grow stack" style="gap:2px;min-width:0"><p style="margin:0;font-weight:500">#'+esc(sb.no)+' \u00b7 '+esc(dstr(orderedAt(sb)))+', '+hhmm(orderedAt(sb))+'</p>'+
+        '<p class="small muted" style="margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+sb.items.map(function(id){ return esc((offer(id)||{}).title || '') }).join(' \u00b7 ')+'</p></div>'+
+        '<div class="stack" style="text-align:right;gap:3px;flex:none"><span class="price">'+money(sb.books)+'</span>'+cashChip(sb)+'</div></button>';
+    }).join('')+'</div>'+moreBtn(pg);
   }
   function periodBlock(per, trade){
     var list = tradeIn(trade, per.from, per.to);
@@ -4496,22 +4523,19 @@
   function scrEarn(){
     var st = standing(), trade = shopTrade(), key = view.p.mon, day = view.p.day;
     if (!key) return scrBilling();
+    var sel = view.p.sel || null;
     if (key === 'all'){
-      var gsAll = {}, ks = [];
-      trade.forEach(function(x){ var pr = periodAt(orderedAt(x.sb)); if (!gsAll[pr.key]){ gsAll[pr.key] = pr; ks.push(pr) } });
-      ks.sort(function(a, b){ return a.from - b.from });
-      /* one column per period, every period from the first to this one */
-      var cols = [];
-      if (ks.length) for (var kk = ks[0].k; kk <= periodAt(now).k; kk++){
-        var pk = periodK(kk), lst = tradeIn(trade, pk.from, pk.to);
-        cols.push({ label: pk.label, at: pk.from, key: pk.key, books: sum(lst, function(x){ return x.sb.books }), orders: lst.length });
-      }
+      var firstAt = trade.length ? orderedAt(trade[trade.length - 1].sb) : now;
+      var allRows = dayRows(trade, Math.min(firstAt, periodAt(now).from), now);
+      var picked = sel ? trade.filter(function(x){ return dayKey(orderedAt(x.sb)) === sel }) : trade;
       var totA = sum(trade, function(x){ return x.sb.books });
       return '<button class="back" data-go="s.billing">← Billing</button>'+
         '<h1>'+esc(tr('All periods together'))+'</h1>'+
-        '<p class="sub">'+trade.length+' order'+(trade.length===1?'':'s')+' · '+money(totA)+' for books, since '+(ks.length ? esc(dstrY(ks[0].from)) : '—')+'</p>'+
-        (cols.length ? bareChart(cols, 'all', periodTip, function(r){ return dstr(r.at) }, 'Orders per period, '+cols.length+' periods') : '')+
-        '<h2 style="margin:18px 0 8px">Periods</h2>'+periodList(trade, false);
+        '<p class="sub">'+trade.length+' order'+(trade.length===1?'':'s')+' · '+money(totA)+' for books'+(trade.length ? ', since '+esc(dstrY(firstAt)) : '')+'</p>'+
+        dayChart(allRows, 'all', { scroll: true, act: 'selday', sel: sel,
+          head: sel ? null : esc(tr('Tap a day to see its orders')) })+
+        earnList(picked, sel, 'na')+
+        '<h2 style="margin:22px 0 8px">Periods</h2>'+periodList(trade, false);
     }
     var per = periodK(+String(key).replace(/^p/, '') || 0);
     var list = tradeIn(trade, per.from, per.to);
@@ -4519,20 +4543,14 @@
     var coming = sum(list.filter(function(x){ return shopCash(x.sb) !== 'paid' }), function(x){ return x.sb.books });
     var tot = sum(list, function(x){ return x.sb.books });
     if (!day){
+      var pickedP = sel ? list.filter(function(x){ return dayKey(orderedAt(x.sb)) === sel }) : list;
       return '<button class="back" data-go="s.billing">← Billing</button>'+
         '<p class="eyebrow">'+(per.current ? 'This period' : per.free ? 'Free month' : per.before ? 'Before your free month' : 'Period')+'</p>'+
         '<h1>'+esc(per.label)+'</h1>'+
         '<p class="sub">'+list.length+' order'+(list.length===1?'':'s')+' · '+money(tot)+' for books'+
           (coming ? ' · '+money(coming)+' still coming' : '')+'</p>'+
-        dayChart(periodDays(per, list), 'mon')+
-        (list.length ? '<div class="rowlist" style="margin-top:14px">'+days.map(function(g){
-          var gc = sum(g.rows.filter(function(x){ return shopCash(x.sb) !== 'paid' }), function(x){ return x.sb.books });
-          return '<button class="row" data-act="earn:'+per.key+':'+g.key+'" style="align-items:center">'+
-            '<div class="grow stack" style="gap:2px"><p style="margin:0;font-weight:600">'+esc(dayName2(g.key))+'</p>'+
-            '<p class="small muted" style="margin:0">'+g.rows.length+' order'+(g.rows.length>1?'s':'')+
-              (gc ? ' · '+money(gc)+' still coming' : ' · all in your till')+'</p></div>'+
-            '<span class="price">'+money(g.books)+'</span><span class="muted" aria-hidden="true">›</span></button>';
-        }).join('')+'</div>' : emptyBox('No orders in this period', 'Orders show up here on the day the reader places them.'));
+        dayChart(periodDays(per, list), 'mon', { act: 'selday', sel: sel, head: sel ? null : esc(tr('Tap a day to see its orders')) })+
+        (list.length ? earnList(pickedP, sel, 'np') : emptyBox('No orders in this period', 'Orders show up here on the day the reader places them.'));
     }
     var dg = days.filter(function(g){ return g.key === day })[0] || { rows:[], books:0 };
     var dc = sum(dg.rows.filter(function(x){ return shopCash(x.sb) !== 'paid' }), function(x){ return x.sb.books });
@@ -6992,6 +7010,10 @@
       "Add location":"Добавить точку",
       "Add photo":"Добавить фото",
       "Add to cart":"В корзину",
+      "Tap a day to see its orders":"Нажмите на день, чтобы увидеть его заказы",
+      "All orders":"Все заказы",
+      "Tap the same day again to see every order.":"Нажмите на тот же день ещё раз, чтобы увидеть все заказы.",
+      "No orders that day.":"В этот день заказов нет.",
       "Books":"Книги",
       "Money":"Деньги",
       "Times":"Время",
@@ -8882,6 +8904,7 @@
         view.p.rv = null; view.draft.rp_text = '';
         toast('Posted \u2014 readers see it under the review'); render(); break;
       }
+      case 'selday': { view.p.sel = view.p.sel === a ? null : a; delete view.p.na; delete view.p.np; render(); break; }
       case 'earn': { go('s.earn', { mon: a, day: b || null }); break; }
       case 'bmon': { view.p = a ? { tab:view.p.tab, mon:a } : { tab:view.p.tab }; window.scrollTo(0,0); render(); break; }
       case 'bday': { view.p = { tab:view.p.tab, mon:view.p.mon, day:a || null }; window.scrollTo(0,0); render(); break; }
@@ -10121,7 +10144,17 @@
     var html = fn();
     if (view.toast) html += '<div class="toast" role="status">'+esc(view.toast)+'</div>';
     var app = document.getElementById('app');
+    /* a sideways-scrolling chart keeps its place when a column is picked */
+    var keepX = {};
+    [].forEach.call(app.querySelectorAll('.chart.scroll'), function(c){
+      var w = c.querySelector('.cwrap'); if (w) keepX[c.getAttribute('data-cid')] = w.scrollLeft;
+    });
     app.innerHTML = html;
+    [].forEach.call(app.querySelectorAll('.chart.scroll'), function(c){
+      var w = c.querySelector('.cwrap'); if (!w) return;
+      var k = c.getAttribute('data-cid');
+      w.scrollLeft = keepX[k] !== undefined ? keepX[k] : w.scrollWidth;
+    });
     app.classList.toggle('bottom-act', !!app.querySelector('.page-tail'));
     i18n();
     markExamples();
