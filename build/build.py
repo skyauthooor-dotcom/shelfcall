@@ -249,6 +249,10 @@ DOC_HEAD = (
     '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n'
     '<meta name="color-scheme" content="light dark">\n'
     '<meta name="robots" content="noindex">\n'
+    # the saved Light / Dark choice, applied before the first paint so a dark
+    # page never flashes white on its way in
+    '<script>try{var t=localStorage.getItem("sc_theme");'
+    'if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>\n'
     '</head>\n<body>\n')
 DOC_TAIL = '\n</body>\n</html>\n'
 
@@ -303,9 +307,29 @@ def write(path, text):
                                        len(text.encode('utf-8'))))
 
 
+def same_merge_rules(src):
+    """The page and the server must merge changes the same way. The rules live
+    in api/_sync-core.js and, as an identical copy, in the master. Stop the
+    build if the two ever drift apart."""
+    core_path = os.path.join(ROOT, 'api', '_sync-core.js')
+    if not os.path.exists(core_path):
+        return
+    def grab(text):
+        a = text.find('/* ==== sync-core:begin'); b = text.find('/* ==== sync-core:end')
+        if a < 0 or b < 0:
+            sys.exit('build.py: the sync-core markers are missing')
+        return '\n'.join(l.strip() for l in text[a:b].split('\n'))
+    with open(core_path, encoding='utf-8') as f:
+        if grab(f.read()) != grab(src):
+            sys.exit('build.py: the merge rules in the master differ from api/_sync-core.js.\n'
+                     'Copy the block between the sync-core markers from one to the other.')
+
+
 def main():
     with open(MASTER, encoding='utf-8') as f:
         src = f.read()
+
+    same_merge_rules(src)
 
     need(ROLE_SWITCHER, src, 'role switcher')
     need(ROLE_CHANGE_HANDLER, src, 'role change handler')
