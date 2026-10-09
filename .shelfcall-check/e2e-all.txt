@@ -1,0 +1,69 @@
+PASS  request_reaches_the_shop_after_approval                         12.8s
+PASS  request_sent_back_never_reaches_the_shop                        10.6s
+PASS  offer_with_photo_reaches_the_reader_and_seen_reaches_the_shop   12.9s
+PASS  offer_sent_back_reaches_the_shop_not_the_reader                 14.7s
+PASS  pickup_order_from_cart_to_review                                19.6s
+PASS  courier_order_from_cart_to_cash                                 22.0s
+PASS  closing_a_request_takes_it_out_of_the_feed                      10.1s
+PASS  two_phones_at_once_and_typing_is_safe                            7.6s
+PASS  start_over_and_separate_worlds                                   3.6s
+PASS  pages_run_offline_without_the_server                             4.8s
+PASS  reader_cancels_an_order_and_the_shop_sees_it                    16.0s
+PASS  shop_removes_its_offer_and_the_reader_cannot_buy_it             15.8s
+PASS  courier_cannot_deliver_and_the_order_unwinds                    21.3s
+PASS  a_shop_tab_left_in_the_background_still_gets_the_request        18.4s
+PASS  courier_pays_the_shop_and_both_screens_change                    6.7s
+PASS  a_handover_where_the_counts_differ_records_no_money              9.7s
+PASS  the_main_button_stays_at_the_bottom_of_the_phone                 2.6s
+PASS  offer_card_opens_the_book_and_buy_goes_to_checkout               1.5s
+PASS  the_reader_sees_their_own_phone_when_editing                     0.7s
+PASS  reader_edits_a_sent_back_request_and_it_goes_to_the_office_again   9.6s
+PASS  shop_answers_a_review_and_the_reader_sees_it                     3.7s
+PASS  office_opens_a_shop_and_a_second_phone_answers_as_it            11.0s
+PASS  shop_registers_and_the_office_opens_it                           6.6s
+PASS  shop_pays_its_commission_with_a_receipt_photo                    4.0s
+PASS  billing_counts_every_order_on_the_day_it_was_placed              1.5s
+PASS  office_sees_everything_about_an_order                            0.7s
+PASS  courier_paying_at_the_counter_needs_the_shops_code              22.6s
+PASS  back_goes_to_the_screen_you_came_from                            2.6s
+PASS  r01_the_reader_door_is_google_only                               0.7s
+PASS  r02_asking_follows_the_form_rules                                1.2s
+FAIL  r03_offer_rows_open_pages_and_nothing_asks_to_tidy_up            0.7s
+      R-03 §7: an offer in a list has one Button; rows have [2] action buttons (Add to cart and Buy)
+PASS  r04_the_reader_sees_a_lowered_price                              6.3s
+PASS  r05_a_removed_offer_cannot_go_in_the_cart_from_a_stale_screen    3.8s
+PASS  r06_checkout_says_cash_and_has_no_card                          14.8s
+PASS  r06_delivery_windows_and_the_courier_note                        2.8s
+FAIL  r07_times_are_shown_in_yerevan                                   3.0s
+      R-07 §9: delivery times follow the phone's time zone, not Asia/Yerevan: ['10:00', '12:00', '14:00'] vs ['18:00', '20:00']
+PASS  r08_a_wrong_pickup_code_is_refused                              19.5s
+PASS  r09_closing_a_request_asks_first                                 1.3s
+PASS  r10_armenian_tab_labels_fit_and_settings_says_what_is_missing    1.5s
+PASS  b01_registration_validates_each_step_and_keeps_the_budget        2.0s
+PASS  b02_an_offer_cannot_say_any_condition                            1.5s
+PASS  b03_offer_edit_rules                                             7.9s
+PASS  b03_nothing_changes_after_the_order                             17.2s
+FAIL  b04_withdrawing_needs_a_reason_and_stops_after_the_order         1.0s
+      B-04 §5 §7: withdrawing asks no reason (confirm enabled, 0 reasons)
+FAIL  b04_an_ordered_offer_cannot_be_withdrawn                        16.9s
+      B-04 §5 §9: an ordered offer was withdrawn from a stale screen (now removed)
+PASS  b05_the_order_list_never_acts                                    0.9s
+FAIL  b06_pickup_buyer_appears_only_once_ready                        16.1s
+      B-06 §8: the pickup buyer's name shows before "ready" ('Dina')
+FAIL  b07_b08_courier_delivery_hides_the_buyer_and_the_note           24.9s
+      B-07/B-08 §8: the shop sees buyer data on a courier delivery: ['Dina on s.reviews']
+FAIL  b09_an_unpaid_statement_is_a_standing_alert                      1.0s
+      B-09 §7: an unpaid statement is a card, not an Alert
+FAIL  b10_a_stale_ready_does_not_undo_a_collection                    24.8s
+      B-10 §9: a stale "Ready" moved a collected order back to ready
+PASS  b08_the_shop_never_sees_the_note_for_the_courier                 5.1s
+PASS  c01_there_is_no_public_courier_sign_up                           1.5s
+FAIL  c02_a_courier_cannot_collect_what_the_shop_has_not_made_ready   16.5s
+      C-02 §5 §9: the courier collected an order the shop had not marked ready (now shipped)
+FAIL  c03_delivery_shows_address_and_note_names_the_cash_and_checks_a_code  10.6s
+      C-03 §5: delivering asks no handover code from the reader
+PASS  c04_could_not_deliver_asks_a_reason_first                       18.7s
+PASS  x05_every_amount_reads_like_5_500_dram                           3.9s
+PASS  x06_logs_carry_no_phone_address_or_code                         14.9s
+
+47 passed, 10 failed
