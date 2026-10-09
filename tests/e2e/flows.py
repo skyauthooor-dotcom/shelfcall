@@ -11,7 +11,7 @@ It starts tests/tools/devserver.js (Node, no packages), which serves public/
 the way Vercel does and runs api/world.js against an in-memory Redis. Build
 first: python3 build/build.py.
 """
-import asyncio, json, os, random, socket, subprocess, sys, time, traceback, urllib.request
+import asyncio, json, os, random, re, socket, subprocess, sys, time, traceback, urllib.request
 from playwright.async_api import async_playwright
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -37,8 +37,9 @@ class Run:
         ctx = await self.browser.new_context(viewport={'width': w, 'height': h})
         await ctx.route('**/fonts.g*/**', lambda r: r.abort())
         pg = await ctx.new_page()
-        pg.errors = []
+        pg.errors, pg.console = [], []
         pg.on('pageerror', lambda e: pg.errors.append(str(e)[:300]))
+        pg.on('console', lambda m: pg.console.append(m.text))
         await pg.goto(self.base + path)
         await self.until(lambda: pg.evaluate('() => !!document.querySelector("main h1")'), 8, 'page did not load: ' + path)
         self.pages.append(pg)
@@ -813,6 +814,542 @@ async def back_goes_to_the_screen_you_came_from(t):
     assert await shop.evaluate('() => SC_DEBUG.screen()') == 's.orders'
 
 
+# ============================ user stories: reader ===========================
+# Each flow is named after its story in user-stories.md (shelfcall-prototype-testing).
+# An assertion message names the rule it checks; a failing one is a finding.
+
+async def _order_in_own_world(t, mode):
+    """A fresh world, a request, an approved offer and an order in `mode`."""
+    w = t.own_world()
+    reader = await t.phone('/reader' + w); admin = await t.phone('/admin' + w); shop = await t.phone('/seller' + w)
+    title = 'Story ' + str(random.randint(1000, 9999))
+    rid = await t.reader_asks(reader, title)
+    await t.admin_passes_request(admin, rid)
+    oid = await t.shop_offers(shop, rid, title)
+    await t.admin_passes_offer(admin, oid)
+    ordid = await t.reader_buys(reader, rid, oid, mode)
+    return w, reader, admin, shop, rid, oid, ordid
+
+
+async def _visible_fields(pg):
+    return await pg.evaluate("""() => [...document.querySelectorAll('#app input, #app textarea, #app select')]
+        .filter(e => e.type !== 'file' && e.type !== 'hidden' && e.offsetParent !== null && !e.disabled).length""")
+
+
+async def _tabbar_shown(pg):
+    return await pg.evaluate("() => { const t = document.getElementById('tabbar'); return !!t && !t.hidden && getComputedStyle(t).display !== 'none' }")
+
+
+@flow
+async def r01_the_reader_door_is_google_only(t):
+    reader = await t.phone('/reader' + t.own_world())
+    await t.go(reader, 'x.auth')
+    txt = await t.text(reader)
+    assert 'Google' in txt, 'R-01 §2: the reader door does not offer Google'
+    n = await reader.evaluate("() => document.querySelectorAll('#app input[type=password], #app input[type=email]').length")
+    assert n == 0, 'R-01 §2: the reader door offers another sign-in method (%d password/email fields)' % n
+
+
+@flow
+async def r02_asking_follows_the_form_rules(t):
+    reader = await t.phone('/reader' + t.own_world())
+    await t.go(reader, 'r.new')
+    assert ('step 1 of 3' in (await t.text(reader)).lower()), 'R-02 §10: step 1 does not say "Step 1 of 3"'
+    assert not await _tabbar_shown(reader), 'R-02 §10: tab bar on a flow screen (step 1)'
+    await t.press(reader, 'kind:concrete')
+    assert ('step 2 of 3' in (await t.text(reader)).lower()), 'R-02 §10: step 2 does not say "Step 2 of 3"'
+    assert not await _tabbar_shown(reader), 'R-02 §10: tab bar on a flow screen (step 2)'
+    back = await reader.evaluate("() => (document.querySelector('#app .back') || {}).textContent || ''")
+    assert re.search(r'\w', back.replace('←', '')) and back.strip() not in ('← Back', 'Back'), 'R-02 §10: the back link does not name where it goes: %r' % back
+    n = await _visible_fields(reader)
+    assert n <= 4, 'R-02 §10: step 2 has %d fields (a heading plus four is the ceiling)' % n
+    await reader.fill('#f_title', 'Story title'); await reader.locator('#f_title').blur()
+    await t.press(reader, 'rstep:3')
+    assert ('step 3 of 3' in (await t.text(reader)).lower()), 'R-02 §10: step 3 does not say "Step 3 of 3"'
+    opts = await reader.evaluate("() => [...document.querySelectorAll('#f_cond option')].map(o => o.value || o.textContent)")
+    assert 'any' in opts, 'R-02 §5: a request cannot say condition "any": %s' % opts
+    n = await _visible_fields(reader)
+    assert n <= 4, 'R-02 §10: step 3 has %d fields' % n
+
+
+@flow
+async def r03_offer_rows_open_pages_and_nothing_asks_to_tidy_up(t):
+    reader = await t.phone('/reader' + t.own_world())
+    await t.go(reader, 'r.request', 'r2')
+    per_row = await reader.evaluate("() => [...document.querySelectorAll('#app .row.tap')].map(r => r.querySelectorAll('button[data-act]').length)")
+    assert per_row, 'R-03: no offer rows on r2'
+    assert max(per_row) <= 1, 'R-03 §7: an offer in a list has one Button; rows have %s action buttons (Add to cart and Buy)' % per_row
+    acts = ' '.join(await t.acts(reader))
+    for word in ('decline', 'dismiss', 'archive', 'markread'):
+        assert word not in acts, 'R-03 §7: the reader is asked to tidy up offers (%s)' % word
+    sent = await reader.evaluate("() => [...document.querySelectorAll('#app .row.tap')].map(r => r.getAttribute('data-p'))")
+    oid = sent[0]
+    await t.go(reader, 'r.offer', oid)
+    await t.until(lambda: t._off(oid).get('status') in ('seen', 'in_cart'), 8, 'R-03 §5: opening the offer did not make it "seen"')
+
+
+@flow
+async def r04_the_reader_sees_a_lowered_price(t):
+    w = t.own_world()
+    reader = await t.phone('/reader' + w); shop = await t.phone('/seller' + w)
+    await t.go(reader, 'r.offer', 'o1')
+    await t.until(lambda: t._off('o1').get('status') == 'seen', 8)
+    old = t._off('o1')['price']
+    await t.until(lambda: shop.evaluate("() => SC_DEBUG.get('offers','o1').status === 'seen'"), 10)
+    await t.go(shop, 's.offers')
+    await t.press(shop, 'editoffer:o1')
+    await shop.fill('#o_price', str(old - 500))
+    await t.press(shop, 'saveoffer:o1')
+    await t.until(lambda: t._off('o1')['price'] == old - 500, 8, 'R-04: the lowered price did not reach the server')
+    await t.go(reader, 'r.offer', 'o1')
+    await t.until(lambda: _contains(reader, '{:,}'.format(old - 500).replace(',', ' ') + ' \u058f'), 10,
+                  'R-04: the reader does not see the lowered price')
+
+
+@flow
+async def r05_a_removed_offer_cannot_go_in_the_cart_from_a_stale_screen(t):
+    w = t.own_world()
+    reader = await t.phone('/reader' + w); shop = await t.phone('/seller' + w)
+    await t.go(reader, 'r.request', 'r2')
+    oid = await reader.evaluate("() => document.querySelector('#app .row.tap').getAttribute('data-p')")
+    await t.until(lambda: t._has(shop, 'offers', oid), 8)
+    await t.go(shop, 's.offers')
+    await shop.evaluate("(o) => { const b = document.createElement('button'); b.setAttribute('data-act', 'removeoffer:' + o); document.body.appendChild(b); b.click(); b.remove(); }", oid)
+    await t.until(lambda: t._off(oid)['status'] == 'removed', 8)
+    await t.until(lambda: t._field(reader, 'offers', oid, 'status', 'removed'), 10)
+    # the reader's old screen still has the button: press it
+    await reader.evaluate("(o) => { const b = document.createElement('button'); b.setAttribute('data-act', 'add:' + o); document.body.appendChild(b); b.click(); b.remove(); }", oid)
+    await reader.wait_for_timeout(400)
+    srv = [c.get('id') for c in t.world().get('cart', [])]
+    assert oid not in srv, 'R-05 §9: a removed offer went into the cart from a stale screen'
+
+
+@flow
+async def r06_checkout_says_cash_and_has_no_card(t):
+    w, reader, admin, shop, rid, oid, ordid = await _order_in_own_world(t, 'courier')
+    # the placed order screen and the order list both state the amount in cash
+    await t.go(reader, 'r.orders')
+    assert await _contains(reader, 'in cash') or await _contains(reader, 'In cash'), 'R-06 §11: the order total does not say to pay in cash'
+    cards = await reader.evaluate("""() => [...document.querySelectorAll('input')].filter(i => /cc-|card/i.test((i.autocomplete||'') + (i.name||'') + (i.id||''))).length""")
+    assert cards == 0, 'R-06 §11: a card field exists'
+
+
+@flow
+async def r06_delivery_windows_and_the_courier_note(t):
+    w = t.own_world()
+    reader = await t.phone('/reader' + w)
+    await t.go(reader, 'r.request', 'r2'); await t.press(reader, 'add:')
+    await t.go(reader, 'r.cart'); await t.press(reader, 'delall:pickup', required=False); await t.press(reader, 'checkout')
+    # pickup: no note for the courier
+    for _ in range(4):
+        if await reader.locator('#c_name').count(): break
+        await t.press(reader, 'editdetails', required=False)
+    assert await reader.locator('#c_note').count() == 0, 'R-06 §8: the note for the courier is asked on a pickup order'
+    await t.go(reader, 'r.cart'); await t.press(reader, 'delall:courier', required=False); await t.press(reader, 'checkout')
+    await t.press(reader, 'editwhen', required=False)
+    chips = await reader.evaluate("""() => [...document.querySelectorAll('[data-act^="setwhen:"]')].map(b => Math.round(b.getBoundingClientRect().height))""")
+    assert chips and min(chips) >= 36, 'R-06 §7: delivery windows are not 36px chips: %s' % chips
+    wraps = await reader.evaluate("""() => { const b = document.querySelector('[data-act^="setwhen:"]'); return b ? getComputedStyle(b.parentElement).flexWrap : '' }""")
+    assert wraps == 'wrap', 'R-06 §7: delivery windows are not a wrapping row (%s)' % wraps
+
+
+@flow
+async def r07_times_are_shown_in_yerevan(t):
+    w = t.own_world()
+    async def slots(tz):
+        ctx = await t.browser.new_context(viewport={'width': 390, 'height': 844}, timezone_id=tz)
+        await ctx.route('**/fonts.g*/**', lambda r: r.abort())
+        pg = await ctx.new_page(); pg.errors = []
+        await pg.goto(t.base + '/reader' + w)
+        await t.until(lambda: pg.evaluate('() => !!document.querySelector("main h1")'), 8)
+        t.pages.append(pg)
+        await t.go(pg, 'r.request', 'r2'); await t.press(pg, 'add:', required=False)
+        await t.go(pg, 'r.cart'); await t.press(pg, 'delall:courier', required=False); await t.press(pg, 'checkout')
+        await t.press(pg, 'editwhen', required=False)
+        return await pg.evaluate("""() => [...document.querySelectorAll('[data-act^="setwhen:"]')].map(b => b.innerText.trim())""")
+    a = await slots('Asia/Yerevan'); b = await slots('America/New_York')
+    assert a and a == b, 'R-07 §9: delivery times follow the phone\'s time zone, not Asia/Yerevan: %s vs %s' % (a[:3], b[:3])
+
+
+@flow
+async def r08_a_wrong_pickup_code_is_refused(t):
+    w, reader, admin, shop, rid, oid, ordid = await _order_in_own_world(t, 'pickup')
+    sub = t._ord(ordid)['subs'][0]
+    await t.until(lambda: t._has(shop, 'orders', ordid), 10)
+    await t.go(shop, 's.order', sub['no'])
+    await t.press(shop, 'ready:%s:%s' % (ordid, sub['no']))
+    await t.until(lambda: t._ord(ordid)['subs'][0]['status'] == 'shipped', 8)
+    await t.go(reader, 'r.orders')
+    await t.until(lambda: _contains(reader, sub['code']), 10)
+    mono = await reader.evaluate("(c) => { const e = [...document.querySelectorAll('#app *')].find(x => x.children.length === 0 && x.textContent.trim() === c); return e ? getComputedStyle(e).fontFamily : '' }", sub['code'])
+    assert 'mono' in mono.lower(), 'R-08 §6: the handover code is not in the mono face (%s)' % mono
+    wrong = '1111' if sub['code'] != '1111' else '2222'
+    await t.go(shop, 's.order', sub['no'])
+    await shop.fill('#code_' + sub['no'], wrong)
+    await t.press(shop, 'entercode:%s:%s' % (ordid, sub['no']))
+    await shop.wait_for_timeout(500)
+    assert t._ord(ordid)['subs'][0]['status'] == 'shipped', 'R-08 §5: a wrong code completed the handover'
+
+
+@flow
+async def r09_closing_a_request_asks_first(t):
+    reader = await t.phone('/reader' + t.own_world())
+    await t.go(reader, 'r.request', 'r3')
+    await reader.evaluate("() => document.querySelector('[data-ask^=\"closereq:\"]').click()")
+    await reader.wait_for_timeout(300)
+    sheet = await reader.evaluate("() => { const d = document.getElementById('sheet'); return d && d.open ? d.innerText : '' }")
+    assert sheet, 'R-09 §7: closing does not open a sheet'
+    assert 'Close this request?' in sheet, 'R-09 §7: the sheet does not name the consequence'
+    assert 'Are you sure' not in sheet, 'R-09 §7: the sheet asks "Are you sure"'
+    assert re.search(r'[Nn]othing is deleted|keep the record', sheet), 'R-09 §7: the sheet does not say what does not change'
+    assert t._req('r3')['status'] == 'open', 'R-09 §7: the request changed before confirm'
+    await reader.evaluate("() => document.querySelector('#sheet [data-act=\"sheetgo\"]').click()")
+    await t.until(lambda: t._req('r3')['status'] == 'closed', 8, 'R-09: confirming did not close the request')
+
+
+@flow
+async def r10_armenian_tab_labels_fit_and_settings_says_what_is_missing(t):
+    reader = await t.phone('/reader' + t.own_world())
+    await t.go(reader, 'x.settings')
+    await t.press(reader, 'lang:hy')
+    await t.go(reader, 'r.requests')
+    over = await reader.evaluate("""() => [...document.querySelectorAll('#tabbar button, #app .seg button, #app .fchip')]
+        .filter(b => b.offsetParent !== null && b.scrollWidth > b.clientWidth + 1).map(b => b.innerText.trim())""")
+    assert not over, 'R-10 §11: Armenian labels overflow their slot: %s' % over
+    await t.go(reader, 'x.settings')
+    txt = await t.text(reader)
+    assert re.search(r'[Tt]ranslation|թարգման', txt), 'R-10 §11: settings does not say which language is incomplete'
+
+
+# ========================== user stories: bookseller =========================
+
+async def _inject(pg, attr, value):
+    """Press a button that an older render of the screen would still show (a stale screen)."""
+    await pg.evaluate("([a, v]) => { const b = document.createElement('button'); b.setAttribute(a, v); document.body.appendChild(b); b.click(); b.remove(); }", [attr, value])
+    await pg.wait_for_timeout(350)
+
+
+@flow
+async def b01_registration_validates_each_step_and_keeps_the_budget(t):
+    shop = await t.phone('/seller' + t.own_world())
+    await t.go(shop, 'x.settings'); await t.press(shop, 'newshop')
+    assert 'step 1 of 4' in (await t.text(shop)).lower(), 'B-01 §10: step 1 does not say "Step 1 of 4"'
+    assert await _visible_fields(shop) <= 4, 'B-01 §10: more than four fields on step 1'
+    await t.press(shop, 'gstep:2')                                   # no name
+    assert 'step 1 of 4' in (await t.text(shop)).lower(), 'B-01 §10: leaving step 1 without a name did not keep you on step 1'
+    assert await shop.evaluate("() => !!document.querySelector('#app .err')"), 'B-01 §10: no message for the missing name'
+    await shop.fill('#g_shop', 'Story Shop'); await t.press(shop, 'gstep:2')
+    await t.press(shop, 'gstep:3')
+    assert await _visible_fields(shop) <= 4, 'B-01 §10: more than four fields on step 3'
+    await t.press(shop, 'gstep:4')                                   # no branch name or address
+    assert 'step 3 of 4' in (await t.text(shop)).lower(), 'B-01 §10: leaving step 3 without an address did not keep you on step 3'
+
+
+@flow
+async def b02_an_offer_cannot_say_any_condition(t):
+    shop = await t.phone('/seller' + t.own_world())
+    await t.go(shop, 's.newoffer', 'r1')
+    for _ in range(6):
+        if await shop.locator('#o_cond').count(): break
+        acts = await t.acts(shop)
+        steps = [a for a in acts if a.startswith('step:')]
+        if not steps: break
+        await t.press(shop, steps[-1])
+        for sel, val in [('#o_title', 'Story book'), ('#o_author', 'A. Writer')]:
+            if await shop.locator(sel).count() and not await shop.locator(sel).input_value(): await shop.fill(sel, val)
+    assert await shop.locator('#o_cond').count(), 'B-02: never reached the condition field'
+    opts = await shop.evaluate("() => [...document.querySelectorAll('#o_cond option')].map(o => (o.value || o.textContent).trim())")
+    assert 'any' not in opts, 'B-02 §5: an offer may say condition "any": %s' % opts
+
+
+@flow
+async def b03_offer_edit_rules(t):
+    w = t.own_world()
+    reader = await t.phone('/reader' + w); shop = await t.phone('/seller' + w)
+    await t.go(reader, 'r.offer', 'o1')
+    await t.until(lambda: t._off('o1').get('status') == 'seen', 8)
+    await t.until(lambda: shop.evaluate("() => SC_DEBUG.get('offers','o1').status === 'seen'"), 10)
+    price = t._off('o1')['price']
+    await t.go(shop, 's.offers'); await t.press(shop, 'editoffer:o1')
+    assert await shop.locator('#o_title').count() == 0, 'B-03 §5: book fields can still be edited after the reader has seen the offer'
+    await shop.fill('#o_price', str(price + 500)); await t.press(shop, 'saveoffer:o1')
+    assert t._off('o1')['price'] == price, 'B-03 §5: the price went up after the reader saw the offer'
+    assert await _contains(shop, 'not raise'), 'B-03 §5: no message for a price rise after seen'
+    for i in range(3):                                           # the 1st, 2nd and 3rd change are allowed
+        await t.go(shop, 's.offers'); await t.press(shop, 'editoffer:o1')
+        price -= 100
+        await shop.fill('#o_price', str(price)); await t.press(shop, 'saveoffer:o1')
+        await t.until(lambda: t._off('o1')['price'] == price, 8, 'B-03 §5: price change %d was refused' % (i + 1))
+    await t.go(shop, 's.offers'); await t.press(shop, 'editoffer:o1')
+    if await shop.locator('#o_price').count():
+        await shop.fill('#o_price', str(price - 100)); await t.press(shop, 'saveoffer:o1')
+    await shop.wait_for_timeout(500)
+    assert t._off('o1')['price'] == price, 'B-03 §5: a 4th price change went through'
+
+
+@flow
+async def b03_nothing_changes_after_the_order(t):
+    w, reader, admin, shop, rid, oid, ordid = await _order_in_own_world(t, 'pickup')
+    await t.until(lambda: t._off(oid)['status'] == 'done_sold', 8)
+    before = t._off(oid)['price']
+    await t.until(lambda: t._field(shop, 'offers', oid, 'status', 'done_sold'), 10)
+    await _inject(shop, 'data-act', 'editoffer:' + oid)            # an old screen's Edit button
+    if await shop.locator('#o_price').count():
+        await shop.fill('#o_price', str(before - 100))
+        await _inject(shop, 'data-act', 'saveoffer:' + oid)
+    await shop.wait_for_timeout(400)
+    assert t._off(oid)['price'] == before, 'B-03 §5: an ordered offer changed its price'
+
+
+@flow
+async def b04_withdrawing_needs_a_reason_and_stops_after_the_order(t):
+    w = t.own_world()
+    shop = await t.phone('/seller' + w)
+    await t.go(shop, 's.offers')
+    await shop.evaluate("() => document.querySelector('[data-ask^=\"removeoffer:\"]').click()")
+    await shop.wait_for_timeout(300)
+    info = await shop.evaluate("""() => { const d = document.getElementById('sheet'); if (!d || !d.open) return null;
+        const go = d.querySelector('[data-act="sheetgo"]'); return { reasons: d.querySelectorAll('[data-act^="sheetreason"]').length, disabled: !!(go && go.disabled) } }""")
+    assert info, 'B-04 §7: withdrawing does not open a sheet'
+    assert info['reasons'] > 0 and info['disabled'], 'B-04 §5 §7: withdrawing asks no reason (confirm enabled, %d reasons)' % info['reasons']
+
+
+@flow
+async def b04_an_ordered_offer_cannot_be_withdrawn(t):
+    w, reader, admin, shop, rid, oid, ordid = await _order_in_own_world(t, 'pickup')
+    await t.until(lambda: t._field(shop, 'offers', oid, 'status', 'done_sold'), 10)
+    await _inject(shop, 'data-act', 'removeoffer:' + oid)          # an old screen's "take down"
+    await shop.wait_for_timeout(500)
+    assert t._off(oid)['status'] == 'done_sold', 'B-04 §5 §9: an ordered offer was withdrawn from a stale screen (now %s)' % t._off(oid)['status']
+
+
+@flow
+async def b05_the_order_list_never_acts(t):
+    shop = await t.phone('/seller' + t.own_world())
+    await t.go(shop, 's.orders')
+    await t.press(shop, 'otab:past')                                 # a fresh shop has only finished orders
+    acts = await shop.evaluate("() => [...document.querySelectorAll('#app .rowlist [data-act], #app .rowlist [data-ask]')].map(e => e.getAttribute('data-act') || e.getAttribute('data-ask'))")
+    assert not acts, 'B-05 §7: the bookseller order list has buttons: %s' % acts[:5]
+    rows = await shop.evaluate("() => document.querySelectorAll('#app .rowlist [data-go=\"s.order\"]').length")
+    assert rows > 0, 'B-05: order rows do not open the order page'
+
+
+@flow
+async def b06_pickup_buyer_appears_only_once_ready(t):
+    w, reader, admin, shop, rid, oid, ordid = await _order_in_own_world(t, 'pickup')
+    order = t._ord(ordid); sub = order['subs'][0]
+    await t.until(lambda: t._has(shop, 'orders', ordid), 10)
+    await t.go(shop, 's.order', sub['no'])
+    txt = await t.text(shop)
+    assert order.get('phone') and order['phone'] not in txt, 'B-06 §8: the pickup buyer\'s phone shows before "ready"'
+    assert order.get('name') and order['name'] not in txt, 'B-06 §8: the pickup buyer\'s name shows before "ready" (%r)' % order.get('name')
+    await t.press(shop, 'ready:%s:%s' % (ordid, sub['no']))
+    await t.until(lambda: t._ord(ordid)['subs'][0]['status'] == 'shipped', 8)
+    await t.go(shop, 's.order', sub['no'])
+    txt = await t.text(shop)
+    assert order['phone'] in txt, 'B-06 §8: the pickup buyer\'s phone does not show after "ready"'
+
+
+@flow
+async def b07_b08_courier_delivery_hides_the_buyer_and_the_note(t):
+    w = t.own_world()
+    reader = await t.phone('/reader' + w); admin = await t.phone('/admin' + w); shop = await t.phone('/seller' + w)
+    courier = await t.phone('/courier' + w)
+    await reader.evaluate("() => { /* fixture: Dina has a note for couriers */ }")
+    title = 'Story ' + str(random.randint(1000, 9999))
+    rid = await t.reader_asks(reader, title)
+    await t.admin_passes_request(admin, rid)
+    oid = await t.shop_offers(shop, rid, title)
+    await t.admin_passes_offer(admin, oid)
+    ordid = await t.reader_buys(reader, rid, oid, 'courier')
+    order = t._ord(ordid); sub = order['subs'][0]
+    secret = [x for x in (order.get('name'), order.get('phone'), order.get('addr'), order.get('note')) if x]
+    assert len(secret) >= 3, 'B-07: the order has no buyer data to hide: %s' % order
+    async def shop_sees():
+        out = []
+        for scr, p in (('s.orders', None), ('s.order', sub['no']), ('s.billing', None), ('s.reviews', None)):
+            await t.go(shop, scr, p); txt = await t.text(shop)
+            out += ['%s on %s' % (x, scr) for x in secret if x in txt]
+        return out
+    await t.until(lambda: t._has(shop, 'orders', ordid), 10)
+    leaks = await shop_sees()
+    await t.go(shop, 's.order', sub['no'])
+    assert await _contains(shop, 'do not see the buyer'), 'B-07 §8: the order page does not say why the buyer is hidden'
+    await t.press(shop, 'ready:%s:%s' % (ordid, sub['no']))
+    await t.until(lambda: t._has(courier, 'orders', ordid), 10)
+    await t.until(lambda: courier.evaluate("(o) => SC_DEBUG.get('orders', o).subs[0].status === 'ready'", ordid), 10)
+    await t.go(courier, 'c.job', sub['no']); await t.press(courier, 'ccollect:%s:%s' % (ordid, sub['no']))
+    await t.until(lambda: t._ord(ordid)['subs'][0]['status'] == 'shipped', 8)
+    await t.go(courier, 'c.job', sub['no']); await t.press(courier, 'cdeliverorder:%s' % ordid)
+    await t.until(lambda: t._ord(ordid)['subs'][0]['status'] == 'completed', 8)
+    await t.until(lambda: t._field(shop, 'orders', ordid, 'id', ordid), 5)
+    await shop.wait_for_timeout(3500)
+    leaks += await shop_sees()
+    assert not leaks, 'B-07/B-08 §8: the shop sees buyer data on a courier delivery: %s' % sorted(set(leaks))
+    cnote = [x for x in (order.get('note'),) if x]
+    if not cnote: print('      note: this order carried no note for the courier, so B-08 was only checked for name/phone/address')
+
+
+@flow
+async def b09_an_unpaid_statement_is_a_standing_alert(t):
+    shop = await t.phone('/seller' + t.own_world())
+    await t.go(shop, 's.billing'); await t.press(shop, 'setstate:due')
+    where = await shop.evaluate("""() => { const e = [...document.querySelectorAll('#app *')].find(x => x.children.length === 0 && /due today/.test(x.textContent));
+        if (!e) return null; const a = e.closest('.note, [role=alert]'); return a ? 'alert' : (e.closest('.card') ? 'card' : 'other') }""")
+    assert where, 'B-09: the due statement is not shown'
+    assert where == 'alert', 'B-09 §7: an unpaid statement is a %s, not an Alert' % where
+    assert await _contains(shop, '֏'), 'B-09 §5: amounts are not in drams'
+
+
+@flow
+async def b10_a_stale_ready_does_not_undo_a_collection(t):
+    w, reader, admin, shop, rid, oid, ordid = await _order_in_own_world(t, 'courier')
+    sub = t._ord(ordid)['subs'][0]
+    courier = await t.phone('/courier' + w)
+    await t.until(lambda: t._has(shop, 'orders', ordid), 10)
+    await t.go(shop, 's.order', sub['no'])
+    await t.press(shop, 'ready:%s:%s' % (ordid, sub['no']))
+    await t.until(lambda: t._has(courier, 'orders', ordid), 10)
+    await t.until(lambda: courier.evaluate("(o) => SC_DEBUG.get('orders', o).subs[0].status === 'ready'", ordid), 10)
+    await t.go(courier, 'c.job', sub['no']); await t.press(courier, 'ccollect:%s:%s' % (ordid, sub['no']))
+    await t.until(lambda: t._ord(ordid)['subs'][0]['status'] == 'shipped', 8)
+    await t.until(lambda: t._field(shop, 'orders', ordid, 'id', ordid), 5)
+    await shop.wait_for_timeout(3500)
+    await _inject(shop, 'data-act', 'ready:%s:%s' % (ordid, sub['no']))   # the shop's second tab, never refreshed
+    await shop.wait_for_timeout(2500)
+    assert t._ord(ordid)['subs'][0]['status'] == 'shipped', 'B-10 §9: a stale "Ready" moved a collected order back to %s' % t._ord(ordid)['subs'][0]['status']
+
+
+@flow
+async def b08_the_shop_never_sees_the_note_for_the_courier(t):
+    w = t.own_world()
+    reader = await t.phone('/reader' + w); shop = await t.phone('/seller' + w)
+    before = {o['id'] for o in t.world()['orders']}
+    await t.go(reader, 'r.request', 'r2'); await t.press(reader, 'add:')
+    await t.go(reader, 'r.cart'); await t.press(reader, 'delall:courier', required=False); await t.press(reader, 'checkout')
+    chose = False
+    for _ in range(12):
+        acts = await t.acts(reader)
+        if await reader.locator('#c_note').count():
+            await reader.fill('#c_note', 'Gate 4417, story note')
+            await reader.locator('#c_note').blur()
+            await t.press(reader, 'donedetails'); continue
+        if 'place' in acts:
+            if 'Gate 4417' not in await t.text(reader):
+                await t.press(reader, 'editdetails'); continue
+            await t.press(reader, 'place'); break
+        order_of = ['donewhen', 'editdetails'] if chose else ['setwhen:', 'donewhen', 'editdetails']
+        for a in order_of:
+            hit = next((x for x in acts if x.startswith(a)), None)
+            if hit:
+                if a == 'setwhen:': chose = True
+                await t.press(reader, hit); break
+    ordid = await t.until(lambda: next((o['id'] for o in t.world()['orders'] if o['id'] not in before), None), 8, 'B-08: no order placed')
+    order = t._ord(ordid); sub = order['subs'][0]
+    assert 'Gate 4417' in (order.get('note') or ''), 'B-08: the note did not reach the order (%r)' % order.get('note')
+    await t.until(lambda: t._has(shop, 'orders', ordid), 10)
+    seen = []
+    for scr, p in (('s.orders', None), ('s.order', sub['no'])):
+        await t.go(shop, scr, p)
+        if 'Gate 4417' in await t.text(shop): seen.append(scr)
+    await t.go(shop, 's.order', sub['no']); await t.press(shop, 'ready:%s:%s' % (ordid, sub['no']))
+    await t.go(shop, 's.order', sub['no'])
+    if 'Gate 4417' in await t.text(shop): seen.append('s.order (ready)')
+    assert not seen, 'B-08 §8: the shop sees the note for the courier on %s' % seen
+
+
+# ============================ user stories: courier ==========================
+
+@flow
+async def c01_there_is_no_public_courier_sign_up(t):
+    courier = await t.phone('/courier' + t.own_world())
+    await t.go(courier, 'x.auth')
+    acts = ' '.join(await t.acts(courier))
+    assert not re.search(r'startreg|newshop|signup|register', acts), 'C-01 §2: the courier door offers a sign-up (%s)' % acts
+    # Prose may say there is nothing to sign up for; only a pressable invitation counts.
+    btns = (await courier.evaluate("() => [...document.querySelectorAll('main button, main a, #dock button')].map(b => b.innerText).join(' | ')")).lower()
+    assert not re.search(r'sign up|create an account|register', btns), 'C-01 §2: the courier door has a sign-up button (%s)' % btns
+    screens = await courier.evaluate("() => Object.keys(window).length")  # page loaded
+    for scr in ('c.reg', 'c.signup', 'c.apply'):
+        await t.go(courier, scr)
+        assert await courier.evaluate('() => SC_DEBUG.screen()') != scr or not await courier.evaluate("() => !!document.querySelector('#app input')"), \
+            'C-01 §2: a courier sign-up screen exists (%s)' % scr
+
+
+@flow
+async def c02_a_courier_cannot_collect_what_the_shop_has_not_made_ready(t):
+    w, reader, admin, shop, rid, oid, ordid = await _order_in_own_world(t, 'courier')
+    sub = t._ord(ordid)['subs'][0]
+    courier = await t.phone('/courier' + w)
+    await t.until(lambda: t._has(courier, 'orders', ordid), 10)
+    assert t._ord(ordid)['subs'][0]['status'] == 'placed'
+    await _inject(courier, 'data-act', 'ccollect:%s:%s' % (ordid, sub['no']))   # a stale or forged button
+    await courier.wait_for_timeout(1500)
+    assert t._ord(ordid)['subs'][0]['status'] == 'placed', 'C-02 §5 §9: the courier collected an order the shop had not marked ready (now %s)' % t._ord(ordid)['subs'][0]['status']
+
+
+@flow
+async def c03_delivery_shows_address_and_note_names_the_cash_and_checks_a_code(t):
+    w = t.own_world()
+    reader = await t.phone('/reader' + w); shop = await t.phone('/seller' + w); courier = await t.phone('/courier' + w)
+    before = {o['id'] for o in t.world()['orders']}
+    await t.go(reader, 'r.request', 'r2'); await t.press(reader, 'add:')
+    await t.go(reader, 'r.cart'); await t.press(reader, 'delall:courier', required=False); await t.press(reader, 'checkout')
+    chose = False
+    for _ in range(12):
+        acts = await t.acts(reader)
+        if await reader.locator('#c_note').count():
+            await reader.fill('#c_note', 'Gate 4417, story note'); await reader.locator('#c_note').blur()
+            await t.press(reader, 'donedetails'); continue
+        if 'place' in acts:
+            if 'Gate 4417' not in await t.text(reader):
+                await t.press(reader, 'editdetails'); continue
+            await t.press(reader, 'place'); break
+        for a in (['donewhen', 'editdetails'] if chose else ['setwhen:', 'donewhen', 'editdetails']):
+            hit = next((x for x in acts if x.startswith(a)), None)
+            if hit:
+                if a == 'setwhen:': chose = True
+                await t.press(reader, hit); break
+    ordid = await t.until(lambda: next((o['id'] for o in t.world()['orders'] if o['id'] not in before), None), 8)
+    order = t._ord(ordid); sub = order['subs'][0]
+    await t.until(lambda: t._has(shop, 'orders', ordid), 10)
+    await t.go(shop, 's.order', sub['no']); await t.press(shop, 'ready:%s:%s' % (ordid, sub['no']))
+    await t.until(lambda: t._has(courier, 'orders', ordid), 10)
+    await t.until(lambda: courier.evaluate("(o) => SC_DEBUG.get('orders', o).subs[0].status === 'ready'", ordid), 10)
+    await t.go(courier, 'c.job', sub['no']); await t.press(courier, 'ccollect:%s:%s' % (ordid, sub['no']))
+    await t.until(lambda: t._ord(ordid)['subs'][0]['status'] == 'shipped', 8)
+    await t.go(courier, 'c.job', sub['no'])
+    txt = await t.text(courier)
+    assert order['addr'].split(',')[0] in txt, 'C-03 §8: the courier does not see the address'
+    assert 'Gate 4417' in txt, 'C-03 §8: the courier does not see the note for the courier'
+    label = await courier.evaluate("() => { const b = document.querySelector('[data-act^=\"cdeliverorder:\"]'); return b ? b.innerText.trim() : '' }")
+    total = order['books'] + order['fee']
+    assert re.search(r'took', label, re.I) and '{:,}'.format(total).replace(',', ' ') in label, \
+        'C-03 §11: the delivery button does not name the cash taken: %r' % label
+    has_code = await courier.evaluate("() => !!document.querySelector('#app input[inputmode=numeric]')")
+    assert has_code, 'C-03 §5: delivering asks no handover code from the reader'
+
+
+@flow
+async def c04_could_not_deliver_asks_a_reason_first(t):
+    w, reader, admin, shop, rid, oid, ordid = await _order_in_own_world(t, 'courier')
+    sub = t._ord(ordid)['subs'][0]
+    courier = await t.phone('/courier' + w)
+    await t.until(lambda: t._has(shop, 'orders', ordid), 10)
+    await t.go(shop, 's.order', sub['no']); await t.press(shop, 'ready:%s:%s' % (ordid, sub['no']))
+    await t.until(lambda: courier.evaluate("(o) => { const x = SC_DEBUG.get('orders', o); return !!x && x.subs[0].status === 'ready' }", ordid), 12)
+    await t.go(courier, 'c.job', sub['no']); await t.press(courier, 'ccollect:%s:%s' % (ordid, sub['no']))
+    await t.until(lambda: t._ord(ordid)['subs'][0]['status'] == 'shipped', 8)
+    await t.go(courier, 'c.job', sub['no'])
+    await courier.evaluate("() => document.querySelector('[data-ask^=\"cfailorder:\"]').click()")
+    await courier.wait_for_timeout(300)
+    info = await courier.evaluate("""() => { const d = document.getElementById('sheet'); if (!d || !d.open) return null;
+        const go = d.querySelector('[data-act="sheetgo"]'); return { reasons: d.querySelectorAll('[data-act^="sheetreason"]').length, disabled: !!(go && go.disabled) } }""")
+    assert info, 'C-04 §7: "Could not deliver" does not open a sheet'
+    assert info['reasons'] > 0 and info['disabled'], 'C-04 §7: the confirm is not disabled until a reason is picked: %s' % info
+    assert t._ord(ordid)['subs'][0]['status'] == 'shipped', 'C-04 §7: the order changed before confirm'
+
+
 async def _contains(pg, s):
     return s in await Run.text(pg)
 
@@ -822,6 +1359,60 @@ async def _not_contains(pg, s):
 
 
 # ================================ runner =====================================
+
+MONEY_OK = re.compile(r'^\d{1,3}(?:[ \u00a0\u202f]\d{3})*[ \u00a0]֏$')
+MONEY_ANY = re.compile(r'[\d][\d ,.\u00a0\u202f]*[ \u00a0]?֏|\bAMD\b|\$\s?\d|\d\s?(?:dram|драм)')
+
+
+async def _money_on(pg):
+    txt = await pg.inner_text('body')
+    bad = []
+    for m in MONEY_ANY.finditer(txt):
+        tok = m.group(0).strip()
+        if tok.endswith('֏') and MONEY_OK.match(tok): continue
+        bad.append(tok)
+    return bad
+
+
+@flow
+async def x05_every_amount_reads_like_5_500_dram(t):
+    w = t.own_world()
+    seen = {}
+    for role, screens in (('reader', ['r.offers', 'r.cart', 'r.orders', 'r.account']),
+                          ('seller', ['s.offers', 's.orders', 's.billing', 's.pay', 's.account']),
+                          ('courier', ['c.jobs', 'c.done'])):
+        pg = await t.phone('/' + role + w)
+        for scr in screens:
+            await t.go(pg, scr)
+            for tok in await _money_on(pg):
+                # The bank-transfer field on s.pay says "AMD" because it is copied into a banking app.
+                if scr == 's.pay' and tok == 'AMD': continue
+                seen.setdefault(tok, set()).add(scr)
+    assert not seen, 'X-05 §5 money.ts: amounts not written as "5 500 ֏": ' + '; '.join(
+        '%r on %s' % (k, ','.join(sorted(v))) for k, v in list(seen.items())[:8])
+
+
+PHONE_RE = re.compile(r'(?:\+374[\s-]?\d{2}[\s-]?\d{3}[\s-]?\d{3}|\b0\d{2}[\s-]?\d{3}[\s-]?\d{3}\b)')
+
+
+@flow
+async def x06_logs_carry_no_phone_address_or_code(t):
+    w, reader, admin, shop, rid, oid, ordid = await _order_in_own_world(t, 'courier')
+    courier = await t.phone('/courier' + w)
+    await t.until(lambda: t._has(courier, 'orders', ordid), 10)
+    order = t._ord(ordid)
+    codes = [str(x.get(k)) for x in order.get('subs', []) for k in ('code', 'payCode') if x.get(k)]
+    if order.get('code'): codes.append(str(order['code']))
+    addr = str(order.get('address') or order.get('addr') or '')
+    leaks = []
+    for pg in (reader, admin, shop, courier):
+        for line in pg.console:
+            if PHONE_RE.search(line): leaks.append('phone: ' + line[:80])
+            if addr and len(addr) > 6 and addr in line: leaks.append('address: ' + line[:80])
+            if any(c and re.search(r'\b%s\b' % re.escape(c), line) for c in codes): leaks.append('code: ' + line[:80])
+    assert not leaks, 'X-06 §8: console output carries personal data: %s' % leaks[:4]
+
+
 async def main(only):
     if not os.path.exists(os.path.join(HERE, 'book.jpg')):
         sys.exit('tests/e2e/book.jpg is missing')
